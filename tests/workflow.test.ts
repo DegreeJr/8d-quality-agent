@@ -1,0 +1,10 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { createInitialState } from '../src/lib/data';
+import { canAccess, reviewSection } from '../src/lib/workflow';
+test('D4 blocks D5 and D6 until a human approves', () => { const s = createInitialState(); assert.equal(canAccess(s, 'NCR-2026-104', 3), true); assert.equal(canAccess(s, 'NCR-2026-104', 4), false); assert.throws(() => reviewSection(s, 'NCR-2026-104', 3, true, ''), /validation evidence/); const reviewed = reviewSection(s, 'NCR-2026-104', 3, true, 'TR-104: current-lot controlled trial reviewed.'); assert.equal(canAccess(reviewed, 'NCR-2026-104', 4), true); assert.equal(canAccess(reviewed, 'NCR-2026-104', 5), false); });
+test('D5 also requires approval and validation notes', () => { let s = reviewSection(createInitialState(), 'NCR-2026-104', 3, true, 'D4 trial reviewed'); s.reports[0].sections[4] = { content: 'Validated corrective action plan', status: 'Draft' }; assert.throws(() => reviewSection(s, 'NCR-2026-104', 4, true, '')); s = reviewSection(s, 'NCR-2026-104', 4, true, 'Pilot plan and acceptance criteria reviewed'); assert.equal(canAccess(s, 'NCR-2026-104', 5), true); });
+test('rejecting D4 revokes downstream approval', () => { let s = reviewSection(createInitialState(), 'NCR-2026-104', 3, true, 'Trial reviewed'); s.reports[0].sections[4] = { content: 'Corrective plan', status: 'Approved' }; s = reviewSection(s, 'NCR-2026-104', 3, false, 'Need repeat trial'); assert.equal(s.reports[0].sections[4].status, 'Draft'); assert.equal(canAccess(s, 'NCR-2026-104', 4), false); });
+test('D8 cannot close while linked CAPAs remain open', () => { const s = createInitialState(); s.reports[0].sections = s.reports[0].sections.map((r, i) => ({ ...r, content: 'Reviewed findings', status: i === 3 || i === 4 ? 'Approved' : 'Complete' })); assert.throws(() => reviewSection(s, 'NCR-2026-104', 7, true, 'Reviewed'), /CAPAs/); });
+test('every linked entity references an existing NCR', () => { const s = createInitialState(); const ids = new Set(s.ncrs.map(n => n.id)); for (const r of [...s.reports, ...s.capas, ...s.audit])
+    assert.ok(ids.has(r.ncrId)); });
