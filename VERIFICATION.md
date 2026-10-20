@@ -13,7 +13,7 @@ Last verified: 2026-10-20, branch `feat/validator-and-data`, Windows 11, Node.js
 
 ## Not verified
 
-- No browser click testing has been done by the agent. The Claude in Chrome extension was not connected, so saving, approving, generating, the live Root cause check panel, audit events and localStorage persistence have not been exercised in a browser. Use the manual checklist in the Phase 1 report or the README demo walkthrough.
+- No browser click testing has been done by the agent. The Claude in Chrome extension was not connected, so saving, approving, generating, the live Root cause check panel, audit events and localStorage persistence have not been exercised in a browser. Use the manual checklist below.
 - All AI output is still deterministic synthetic text with a simulated delay. No model, AWS service, authentication or backend is connected.
 - The root cause check is syntactic. It does not confirm that a cited evidence id belongs to the current lot.
 
