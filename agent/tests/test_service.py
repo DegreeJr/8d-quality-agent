@@ -93,3 +93,38 @@ def test_nothing_retrieved_means_evidence_missing(corpus):
 def test_invalid_requests_are_rejected(payload):
     with pytest.raises(RequestError):
         parse_request(payload)
+
+
+NCR_100 = {"id": "NCR-2026-100", "title": "Coating thickness below specification",
+           "description": "Inspection identified a non-conformance against the approved product specification. Affected units have been segregated for engineering review.",
+           "area": "Coating"}
+
+
+def test_rule_d_hypothesis_without_current_lot_evidence_is_unverified(corpus):
+    response = run(MockEngine(), corpus, request(ncr=NCR_100, evidence=[]))
+    assert response["accepted"] is True
+    assert response["proposal"]["root_cause"]
+    assert response["proposal_status"] == "unverified_hypothesis"
+    assert response["validation"]["hypothesis_status"] == "unverified_hypothesis"
+    assert response["proposal"]["missing_data"]
+
+
+def test_rule_d_empty_missing_data_is_filled_in(corpus):
+    engine = ScriptedEngine(lambda ids: Proposal(root_cause="Hypothesis: worn nozzle, as in " + ids[0] + ".", cited_ncr_ids=[ids[0]], confidence="medium", missing_data=[]))
+    response = run(engine, corpus, request(ncr=NCR_100, evidence=[]))
+    assert response["accepted"] is True
+    assert response["proposal_status"] == "unverified_hypothesis"
+    assert response["proposal"]["missing_data"] == ["No current-lot evidence is registered for NCR-2026-100; the hypothesis stays unverified until it is."]
+
+
+def test_rule_d_confirmed_claim_without_current_lot_evidence_is_rejected(corpus):
+    engine = ScriptedEngine(lambda ids: Proposal(root_cause="Root cause is confirmed: worn nozzle, as in " + ids[0] + ".", cited_ncr_ids=[ids[0]], confidence="high", missing_data=["x"]))
+    response = run(engine, corpus, request(ncr=NCR_100, evidence=[]))
+    assert response["accepted"] is False
+    assert [i["code"] for i in response["validation"]["issues"]] == ["ROOT_CAUSE_CLAIMED_CONFIRMED"]
+    assert response["proposal_status"] == "no_hypothesis"
+
+
+def test_rule_d_status_with_registered_current_lot_evidence(corpus):
+    response = run(MockEngine(), corpus)
+    assert response["proposal_status"] == "hypothesis_with_current_evidence"

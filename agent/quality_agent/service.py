@@ -9,9 +9,10 @@ from .corpus import Corpus
 from .engines import Engine, EngineRequest, Proposal
 from .retrieval import Retriever
 from .tools import Toolbox
-from .validator import EvidenceRef, validate_root_cause
+from .validator import UNVERIFIED, EvidenceRef, validate_root_cause
 
 _NCR_ID = re.compile(r"^NCR-\d{4}-\d{3}$", re.IGNORECASE)
+UNVERIFIED_MISSING_DATA = "No current-lot evidence is registered for {}; the hypothesis stays unverified until it is."
 
 
 class RequestError(ValueError):
@@ -52,10 +53,14 @@ def propose_root_cause(payload: Any, engine: Engine, corpus: Corpus, retriever: 
     request = parse_request(payload)
     toolbox = Toolbox(corpus, retriever)
     raw = engine.propose(request, toolbox)
+    ncr_id = request.ncr["id"]
+    # Rule D: without current-lot evidence a hypothesis is unverified and must say what data is missing.
+    if raw.root_cause and not raw.missing_data and not any(e.ncr_id == ncr_id for e in request.current_evidence):
+        raw = raw.model_copy(update={"missing_data": [UNVERIFIED_MISSING_DATA.format(ncr_id)]})
     # Rule A uses the ids the tools returned in this invocation, not ids the model claims to have retrieved.
     validation = validate_root_cause(
-        proposal_text(raw), toolbox.retrieved_ids, current_ncr_id=request.ncr["id"],
-        evidence_registry=request.current_evidence + corpus.evidence_refs(),
+        proposal_text(raw), toolbox.retrieved_ids, current_ncr_id=ncr_id,
+        evidence_registry=request.current_evidence + corpus.evidence_refs(), missing_data=raw.missing_data,
     )
     if validation.ok:
         final = raw
@@ -63,12 +68,20 @@ def propose_root_cause(payload: Any, engine: Engine, corpus: Corpus, retriever: 
         codes = ", ".join(i.code for i in validation.issues)
         final = Proposal(root_cause=None, cited_ncr_ids=[], confidence="low",
                          missing_data=[*raw.missing_data, "Evidence missing: the proposal was rejected by the root cause check (" + codes + ")."])
+    if final.root_cause is None:
+        proposal_status = "no_hypothesis"
+    elif validation.hypothesis_status == UNVERIFIED:
+        proposal_status = UNVERIFIED
+    else:
+        proposal_status = "hypothesis_with_current_evidence"
     return {
         "status": "success",
         "mode": engine.mode,
         "model_id": engine.model_id,
         "model_name": engine.model_name,
-        "ncr_id": request.ncr["id"],
+        "ncr_id": ncr_id,
+        # unverified_hypothesis: no current-lot evidence is registered; D4 approval stays locked.
+        "proposal_status": proposal_status,
         "proposal": final.model_dump(),
         # Kept for audit when the check rejects the model output.
         "raw_proposal": None if validation.ok else raw.model_dump(),
