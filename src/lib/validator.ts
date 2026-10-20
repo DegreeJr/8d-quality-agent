@@ -5,12 +5,15 @@
 // Rule B (generic claims): a generic root-cause phrase (English or Indonesian, see GENERIC_PHRASES)
 //   is rejected with GENERIC_CLAIM_UNSUPPORTED unless BOTH hold:
 //     1. at least one retrieved NCR id is cited in the text, AND
-//     2. the text references objective current-lot evidence, defined as an evidence record id
-//        PREFIX-NNN where PREFIX is one of EVIDENCE_PREFIXES (for example TR-104 or GR-032).
-//   The check is syntactic: it cannot confirm that a cited evidence id really belongs to the
-//   current lot. That needs an evidence registry on the backend.
+//     2. the text references objective current-lot evidence: an evidence record id PREFIX-NNN,
+//        where PREFIX is one of EVIDENCE_PREFIXES, that is listed in options.evidenceRegistry
+//        with ncrId equal to options.currentNcrId. For NCR-2026-104, TR-104 counts; GR-032
+//        (owned by NCR-2026-032) and TR-999 (not registered) do not.
+//   Without a registry the check falls back to the id syntax alone and cannot confirm ownership.
 // Rule C (no evidence): when the retrieved set is empty, the text must state that evidence is
 //   missing and must not assert a root cause. Otherwise: ROOT_CAUSE_WITHOUT_EVIDENCE.
+
+import type { EvidenceRecord } from './types';
 
 export type ValidationIssueCode = 'CITATION_NOT_RETRIEVED' | 'GENERIC_CLAIM_UNSUPPORTED' | 'ROOT_CAUSE_WITHOUT_EVIDENCE';
 
@@ -29,6 +32,8 @@ export interface ValidateOptions {
     currentNcrId?: string;
     // Overrides EVIDENCE_PREFIXES.
     evidencePrefixes?: readonly string[];
+    // When given, only evidence ids registered to currentNcrId count as current-lot evidence.
+    evidenceRegistry?: readonly Pick<EvidenceRecord, 'id' | 'ncrId'>[];
 }
 
 export const GENERIC_PHRASES: readonly string[] = [
@@ -80,8 +85,40 @@ export function genericPhrasesIn(text: string): string[] {
     return GENERIC_PHRASES.filter(p => new RegExp('\\b' + escapeRegExp(p).replace(/\s+/g, '\\s+') + '\\b', 'i').test(text));
 }
 
-export function hasCurrentLotEvidence(text: string, prefixes: readonly string[] = EVIDENCE_PREFIXES) {
-    return prefixes.length > 0 && new RegExp('\\b(?:' + prefixes.map(escapeRegExp).join('|') + ')-\\d{3,}\\b', 'i').test(text);
+export function evidenceIdsIn(text: string, prefixes: readonly string[] = EVIDENCE_PREFIXES): string[] {
+    if (!prefixes.length)
+        return [];
+    const pattern = new RegExp('\\b(?:' + prefixes.map(escapeRegExp).join('|') + ')-\\d{3,}\\b', 'gi');
+    return [...new Set((text.match(pattern) ?? []).map(id => id.toUpperCase()))];
+}
+
+export interface EvidenceCheck {
+    accepted: string[];
+    rejected: { id: string; reason: string }[];
+}
+
+// Sorts the evidence ids in the text into those that count as current-lot evidence and those that do not.
+export function checkCurrentLotEvidence(text: string, options: ValidateOptions = {}): EvidenceCheck {
+    const ids = evidenceIdsIn(text, options.evidencePrefixes);
+    if (!options.evidenceRegistry)
+        return { accepted: ids, rejected: [] };
+    const current = options.currentNcrId?.toUpperCase();
+    const owners = new Map(options.evidenceRegistry.map(r => [r.id.toUpperCase(), r.ncrId.toUpperCase()]));
+    const result: EvidenceCheck = { accepted: [], rejected: [] };
+    for (const id of ids) {
+        const owner = owners.get(id);
+        if (!owner)
+            result.rejected.push({ id, reason: id + ' is not in the evidence registry' });
+        else if (owner !== current)
+            result.rejected.push({ id, reason: id + ' belongs to ' + owner + (current ? ', not ' + current : '') });
+        else
+            result.accepted.push(id);
+    }
+    return result;
+}
+
+export function hasCurrentLotEvidence(text: string, options: ValidateOptions = {}) {
+    return checkCurrentLotEvidence(text, options).accepted.length > 0;
 }
 
 export function validateRootCause(text: string, retrievedIds: readonly string[], options: ValidateOptions = {}): ValidationResult {
@@ -98,9 +135,12 @@ export function validateRootCause(text: string, retrievedIds: readonly string[],
     const generic = genericPhrasesIn(text);
     if (generic.length) {
         const citesRetrieved = cited.some(id => retrieved.has(id));
-        const hasEvidence = hasCurrentLotEvidence(text, options.evidencePrefixes);
+        const evidence = checkCurrentLotEvidence(text, options);
+        const hasEvidence = evidence.accepted.length > 0;
         if (!citesRetrieved || !hasEvidence) {
-            const missing = [!citesRetrieved && 'a cited retrieved NCR', !hasEvidence && 'a current-lot evidence id such as TR-104'].filter(Boolean).join(' and ');
+            const example = options.evidenceRegistry ? options.evidenceRegistry.find(r => r.ncrId.toUpperCase() === current)?.id : 'TR-104';
+            const evidenceNeed = 'a current-lot evidence id' + (options.evidenceRegistry ? ' registered to this NCR' : '') + (example ? ' such as ' + example : '') + (evidence.rejected.length ? ' (' + evidence.rejected.map(r => r.reason).join('; ') + ')' : '');
+            const missing = [!citesRetrieved && 'a cited retrieved NCR', !hasEvidence && evidenceNeed].filter(Boolean).join(' and ');
             issues.push({ code: 'GENERIC_CLAIM_UNSUPPORTED', message: 'Generic claim "' + generic.join('", "') + '" needs ' + missing + '. Otherwise state "evidence missing".' });
         }
     }

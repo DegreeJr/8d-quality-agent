@@ -47,6 +47,14 @@ export interface HistoricalCase {
     evidence: string;
     closed: string;
 }
+// An objective evidence record (trial report, gauge study, teardown, ...) owned by one NCR.
+export interface EvidenceRecord {
+    id: string;
+    ncrId: string;
+    kind: string;
+    summary: string;
+    date: string;
+}
 export interface AuditEvent {
     id: string;
     ncrId: string;

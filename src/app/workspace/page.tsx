@@ -8,18 +8,21 @@ import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Badge, PageHeading } from '@/components/common';
 import { disciplines } from '@/lib/types';
-import { history } from '@/lib/data';
+import { evidenceRegistry, history } from '@/lib/data';
 import { canAccess, reviewSection, rootCauseCheck, rootCauseAuditAction, RootCauseRejectedError } from '@/lib/workflow';
 import { ValidationResult } from '@/lib/validator';
 // Live result of the root cause validator for the D4 editor text.
-function RootCauseCheck({ result }: {
+function RootCauseCheck({ result, ncrId }: {
     result: ValidationResult;
+    ncrId: string;
 }) {
+    const registered = evidenceRegistry.filter(r => r.ncrId === ncrId);
     return <section className={'root-cause-check ' + (result.ok ? 'pass' : 'fail')} aria-live="polite" aria-label="Root cause check">
         <header>{result.ok ? <CheckCircle2 size={16}/> : <AlertCircle size={16}/>}Root cause check: {result.ok ? 'pass' : 'fail'}</header>
         {result.ok
             ? <p>Citations are retrieved cases, no unsupported generic claims, and missing evidence is stated where needed.</p>
             : <ul>{result.issues.map((issue, i) => <li key={i}><code>{issue.code}</code> {issue.message}</li>)}</ul>}
+        <small>Registered current-lot evidence for {ncrId}: {registered.length ? registered.map(r => r.id + ' (' + r.kind + ')').join(', ') : 'none'}.</small>
         <small>Checks the editor text as you type. Approval checks the saved content.</small>
     </section>;
 }
@@ -32,7 +35,7 @@ function Editor({ id, step, content, locked, onGenerate, busy, check, onDirtyCha
     busy: boolean;
     check?: (text: string) => ValidationResult;
     onDirtyChange: (dirty: boolean) => void;
-}) { const { saveSection } = useApp(); const [draft, setDraft] = useState(content); const dirty = draft !== content; return <><div className="editor-toolbar"><span><FileSearch size={16}/> D{step + 1} report content</span><span>{dirty ? 'Unsaved changes' : 'Saved to browser'}</span></div><textarea className="report-editor" aria-label={'D' + (step + 1) + ' report content'} value={draft} disabled={locked || busy} onChange={e => { setDraft(e.target.value); onDirtyChange(e.target.value !== content); }} placeholder="Generate a simulated suggestion or enter your engineering findings here…"/>{check && <RootCauseCheck result={check(draft)}/>}<div className="editor-actions"><Button variant="outline" disabled={locked || busy} onClick={onGenerate}>{busy ? <LoaderCircle className="spin" size={16}/> : <Sparkles size={16}/>} {busy ? 'Analyzing case…' : 'Generate AI suggestion'}</Button><Button disabled={locked || busy || !dirty || !draft.trim()} onClick={() => saveSection(id, step, draft)}><Save size={16}/>Save changes</Button></div>{dirty && <p className="small muted">Save your edits before reviewing. Approval applies to the saved report content.</p>}</>; }
+}) { const { saveSection } = useApp(); const [draft, setDraft] = useState(content); const dirty = draft !== content; return <><div className="editor-toolbar"><span><FileSearch size={16}/> D{step + 1} report content</span><span>{dirty ? 'Unsaved changes' : 'Saved to browser'}</span></div><textarea className="report-editor" aria-label={'D' + (step + 1) + ' report content'} value={draft} disabled={locked || busy} onChange={e => { setDraft(e.target.value); onDirtyChange(e.target.value !== content); }} placeholder="Generate a simulated suggestion or enter your engineering findings here…"/>{check && <RootCauseCheck result={check(draft)} ncrId={id}/>}<div className="editor-actions"><Button variant="outline" disabled={locked || busy} onClick={onGenerate}>{busy ? <LoaderCircle className="spin" size={16}/> : <Sparkles size={16}/>} {busy ? 'Analyzing case…' : 'Generate AI suggestion'}</Button><Button disabled={locked || busy || !dirty || !draft.trim()} onClick={() => saveSection(id, step, draft)}><Save size={16}/>Save changes</Button></div>{dirty && <p className="small muted">Save your edits before reviewing. Approval applies to the saved report content.</p>}</>; }
 export default function Workspace() {
     const { state, generate, review, notify, logSystem } = useApp();
     const [id, setId] = useState('NCR-2026-104');

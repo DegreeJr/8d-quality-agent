@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { validateRootCause, ValidationIssueCode } from '../src/lib/validator';
-import { createInitialState, sectionDraft } from '../src/lib/data';
+import { createInitialState, evidenceRegistry, history, sectionDraft } from '../src/lib/data';
 import { reviewSection, rootCauseCheck, rootCauseAuditAction, RootCauseRejectedError } from '../src/lib/workflow';
 
 const retrieved = ['NCR-2025-084', 'NCR-2026-019'];
@@ -110,4 +110,41 @@ test('validator audit actions name the trigger and issue codes', () => {
     const issues = validateRootCause('root cause: human error', []).issues;
     assert.equal(rootCauseAuditAction(3, 'approval', issues), 'Root cause check rejected D4 approval: GENERIC_CLAIM_UNSUPPORTED, ROOT_CAUSE_WITHOUT_EVIDENCE.');
     assert.equal(rootCauseAuditAction(3, 'saved', issues.slice(0, 1)), 'Root cause check rejected D4 saved draft: GENERIC_CLAIM_UNSUPPORTED.');
+});
+
+test('evidence registry: only evidence registered to the open NCR counts for rule B', () => {
+    const options = { currentNcrId: 'NCR-2026-104', evidenceRegistry };
+    const check = (text: string) => validateRootCause(text, retrieved, options);
+    const gr = check('Human error per NCR-2025-084, see gauge study GR-032.');
+    assert.deepEqual(gr.issues.map(i => i.code), ['GENERIC_CLAIM_UNSUPPORTED']);
+    assert.match(gr.issues[0].message, /GR-032 belongs to NCR-2026-032, not NCR-2026-104/);
+    const tr999 = check('Human error per NCR-2025-084, see trial TR-999.');
+    assert.deepEqual(tr999.issues.map(i => i.code), ['GENERIC_CLAIM_UNSUPPORTED']);
+    assert.match(tr999.issues[0].message, /TR-999 is not in the evidence registry/);
+    assert.deepEqual(check('Human error per NCR-2025-084, confirmed by trial TR-104.').issues, []);
+    assert.deepEqual(check('Human error per NCR-2025-084: GR-032 and tr-104.').issues, [], 'one registered id is enough, case-insensitive');
+});
+
+test('evidence registry: without a current NCR nothing counts', () => {
+    assert.deepEqual(validateRootCause('Human error per NCR-2025-084, TR-104.', retrieved, { evidenceRegistry }).issues.map(i => i.code), ['GENERIC_CLAIM_UNSUPPORTED']);
+});
+
+test('evidence registry is used by the D4 approval gate', () => {
+    const s = createInitialState();
+    assert.equal(rootCauseCheck(s, 'NCR-2026-104', 'Human error per NCR-2025-084, see GR-032.').ok, false);
+    assert.equal(rootCauseCheck(s, 'NCR-2026-104', 'Human error per NCR-2025-084, see TR-999.').ok, false);
+    assert.equal(rootCauseCheck(s, 'NCR-2026-104', 'Human error per NCR-2025-084, see TR-104.').ok, true);
+    s.reports[0].sections[3] = { content: 'Human error per NCR-2025-084, see GR-032.', status: 'Draft' };
+    assert.throws(() => reviewSection(s, 'NCR-2026-104', 3, true, 'Reviewed'), RootCauseRejectedError);
+});
+
+test('evidence registry is consistent with the dataset', () => {
+    const s = createInitialState();
+    const ncrIds = new Set([...s.ncrs.map(n => n.id), ...history.map(h => h.id)]);
+    assert.equal(new Set(evidenceRegistry.map(r => r.id)).size, evidenceRegistry.length, 'evidence ids are unique');
+    for (const r of evidenceRegistry)
+        assert.ok(ncrIds.has(r.ncrId), r.id + ' owner exists');
+    for (const h of history)
+        for (const id of h.evidence.match(/\b[A-Z]+-\d{3}\b/g) ?? [])
+            assert.equal(evidenceRegistry.find(r => r.id === id)?.ncrId, h.id, id + ' is registered to ' + h.id);
 });

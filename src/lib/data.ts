@@ -1,10 +1,32 @@
-import { AppState, HistoricalCase, NCR } from './types';
+import { AppState, EvidenceRecord, HistoricalCase, NCR } from './types';
 export const history: HistoricalCase[] = [
     { id: 'NCR-2025-084', title: 'Porosity in aluminum housing', area: 'Die casting', category: 'Porosity', rootCause: 'Vent channel blockage confirmed by tooling inspection.', action: 'Clean vent channels every 400 cycles; add vent inspection to setup checklist.', evidence: 'Tooling inspection TI-084 · metallography LAB-218', closed: '2025-11-18' },
     { id: 'NCR-2026-019', title: 'Housing voids after tool change', area: 'Die casting', category: 'Porosity', rootCause: 'Incorrect vacuum timing confirmed by parameter log comparison.', action: 'Lock validated vacuum recipe and verify first-off samples.', evidence: 'Parameter log PL-019 · first-off verification FV-019', closed: '2026-03-12' },
     { id: 'NCR-2026-032', title: 'Shaft diameter outside tolerance', area: 'CNC machining', category: 'Dimensional', rootCause: 'Tool wear confirmed by measured insert condition.', action: 'Introduce tool-life limits and in-process gauging.', evidence: 'Gauge study GR-032 · tool inspection TI-032', closed: '2026-05-07' },
     { id: 'NCR-2026-047', title: 'Surface scoring on drive cover', area: 'Assembly', category: 'Surface finish', rootCause: 'Fixture contact point confirmed through controlled reproduction.', action: 'Replace fixture pads and add visual checks.', evidence: 'Trial report TR-047 · fixture photos FP-047', closed: '2026-07-22' },
     { id: 'NCR-2026-061', title: 'Seal leak during end-of-line test', area: 'Assembly', category: 'Leakage', rootCause: 'Seal orientation confirmed by teardown.', action: 'Add poka-yoke locator and operator training.', evidence: 'Teardown TD-061 · validation VT-061', closed: '2026-09-02' }
+];
+// Synthetic evidence registry. Rule B accepts an evidence id only if it is listed here for the NCR being investigated.
+export const evidenceRegistry: EvidenceRecord[] = [
+    { id: 'TI-084', ncrId: 'NCR-2025-084', kind: 'Tooling inspection', summary: 'Vent channel condition on the housing die.', date: '2025-11-04' },
+    { id: 'LAB-218', ncrId: 'NCR-2025-084', kind: 'Metallography', summary: 'Pore morphology of sectioned housings.', date: '2025-11-06' },
+    { id: 'PL-019', ncrId: 'NCR-2026-019', kind: 'Parameter log', summary: 'Vacuum timing before and after the tool change.', date: '2026-03-02' },
+    { id: 'FV-019', ncrId: 'NCR-2026-019', kind: 'First-off verification', summary: 'First-off samples after recipe lock.', date: '2026-03-10' },
+    { id: 'GR-032', ncrId: 'NCR-2026-032', kind: 'Gauge study', summary: 'Gauge R&R of the shaft diameter gauge.', date: '2026-04-22' },
+    { id: 'TI-032', ncrId: 'NCR-2026-032', kind: 'Tooling inspection', summary: 'Measured insert wear at the time of the defect.', date: '2026-04-23' },
+    { id: 'TR-047', ncrId: 'NCR-2026-047', kind: 'Trial report', summary: 'Controlled reproduction of scoring on the assembly fixture.', date: '2026-07-10' },
+    { id: 'FP-047', ncrId: 'NCR-2026-047', kind: 'Fixture photos', summary: 'Fixture contact pads before replacement.', date: '2026-07-10' },
+    { id: 'TD-061', ncrId: 'NCR-2026-061', kind: 'Teardown', summary: 'Teardown of leaking seal assemblies.', date: '2026-08-21' },
+    { id: 'VT-061', ncrId: 'NCR-2026-061', kind: 'Validation test', summary: 'Leak test of 30 assemblies with the locator.', date: '2026-08-29' },
+    { id: 'TR-104', ncrId: 'NCR-2026-104', kind: 'Trial report', summary: 'Controlled trial on current lot LOT-DC-2410: porosity rate before and after vent cleaning.', date: '2026-10-15' },
+    { id: 'PL-104', ncrId: 'NCR-2026-104', kind: 'Parameter log', summary: 'Die-casting cell parameter log for LOT-DC-2410.', date: '2026-10-13' },
+    { id: 'GR-103', ncrId: 'NCR-2026-103', kind: 'Gauge study', summary: 'Gauge R&R of the bore gauge used on LOT-CNC-1834.', date: '2026-10-13' },
+    { id: 'TI-103', ncrId: 'NCR-2026-103', kind: 'Tooling inspection', summary: 'Insert condition on the turning center for LOT-CNC-1834.', date: '2026-10-13' },
+    { id: 'FP-102', ncrId: 'NCR-2026-102', kind: 'Fixture photos', summary: 'Fixture pads at the drive cover station for LOT-AS-0902.', date: '2026-10-12' },
+    { id: 'TD-101', ncrId: 'NCR-2026-101', kind: 'Teardown', summary: 'Teardown of leaking units from LOT-AS-0898.', date: '2026-10-11' },
+    { id: 'VT-099', ncrId: 'NCR-2026-099', kind: 'Validation test', summary: 'Pilot lot inspection after the deburring change.', date: '2026-10-09' },
+    { id: 'TD-098', ncrId: 'NCR-2026-098', kind: 'Teardown', summary: 'Teardown of connectors that failed seating.', date: '2026-10-08' },
+    { id: 'LAB-097', ncrId: 'NCR-2026-097', kind: 'Metallography', summary: 'Pore cluster sections from LOT-DC-2380.', date: '2026-10-07' }
 ];
 const rows = [
     ['104', 'Porosity in aluminum motor housing', 'Die casting', 'POR-01', 'Porosity', 'Critical', 'Pending approval', 'Sarah Chen', 48, 'LOT-DC-2410', ['NCR-2025-084', 'NCR-2026-019']],
