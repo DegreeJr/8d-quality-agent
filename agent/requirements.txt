@@ -1,0 +1,4 @@
+# Python agent dependencies (approved). Install into agent/.venv.
+strands-agents==1.61.1
+bedrock-agentcore==1.24.2
+pytest==9.1.1

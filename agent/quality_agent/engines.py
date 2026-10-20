@@ -1,0 +1,133 @@
+"""Proposal engines. The service depends only on the Engine protocol, so providers are swappable:
+
+- mock:    deterministic, uses the same tools, no model and no AWS calls (default).
+- bedrock: a Strands agent backed by Amazon Bedrock.
+- sap:     planned (SAP AI Core). Add a factory to MODEL_FACTORIES that returns a Strands Model,
+           or implement Engine directly if the provider does not fit Strands. Not implemented.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from typing import Any, Literal, Protocol
+
+from pydantic import BaseModel, Field
+
+from .config import Settings
+from .tools import Toolbox
+from .validator import EvidenceRef
+
+
+class Proposal(BaseModel):
+    root_cause: str | None = Field(description="Proposed root cause hypothesis, or null when evidence is missing.")
+    cited_ncr_ids: list[str] = Field(default_factory=list, description="Historical NCR ids returned by the tools that support the hypothesis.")
+    confidence: Literal["low", "medium", "high"]
+    missing_data: list[str] = Field(default_factory=list, description="Data needed before the root cause can be validated.")
+
+
+@dataclass(frozen=True)
+class EngineRequest:
+    ncr: dict[str, str]
+    current_evidence: list[EvidenceRef] = field(default_factory=list)
+
+
+class Engine(Protocol):
+    mode: str
+    model_id: str | None
+
+    def propose(self, request: EngineRequest, toolbox: Toolbox) -> Proposal: ...
+
+
+def _query(ncr: dict[str, str]) -> str:
+    return ncr.get("title", "") + ". " + ncr.get("description", "")
+
+
+class MockEngine:
+    """Calls the tools like the agent would and builds a proposal from the top results without a model."""
+
+    mode = "mock"
+    model_id = None
+
+    def propose(self, request: EngineRequest, toolbox: Toolbox) -> Proposal:
+        results = toolbox.search_similar_ncr(_query(request.ncr))["results"]
+        if not results:
+            return Proposal(root_cause=None, confidence="low",
+                            missing_data=["Evidence missing: no similar historical NCR was retrieved."])
+        records = [toolbox.get_ncr(r["id"]) for r in results]
+        top = records[0]
+        supporting = [r for r in records if r["rootCauseCode"] == top["rootCauseCode"]]
+        confidence: Literal["low", "medium", "high"] = "high" if len(supporting) >= 3 else "medium" if len(supporting) == 2 else "low"
+        cited = [r["id"] for r in supporting]
+        missing = [] if request.current_evidence else ["No current-lot evidence is registered for " + request.ncr["id"] + "."]
+        missing.append("Current-lot confirmation (controlled trial or inspection) of the hypothesis before D4 approval.")
+        return Proposal(
+            root_cause="Hypothesis (historical, not validated): " + top["confirmedRootCause"].rstrip(".")
+            + ", as recorded in " + ", ".join(cited) + ".",
+            cited_ncr_ids=cited, confidence=confidence, missing_data=missing,
+        )
+
+
+SYSTEM_PROMPT = """You are an 8D quality engineering assistant proposing a D4 root cause hypothesis.
+Rules:
+- Use search_similar_ncr first, then get_ncr for promising results.
+- Cite only NCR ids returned by the tools. Never invent ids.
+- Do not propose generic causes such as "human error", "operator error" or "needs training" unless a cited NCR and a current-lot evidence id support it.
+- If no relevant historical NCR is found, set root_cause to null and say "evidence missing" in missing_data.
+- The output is a hypothesis for an engineer to validate, not a confirmed cause."""
+
+
+class StrandsEngine:
+    """A Strands agent with the two tools. The model comes from a factory so any Strands model provider fits."""
+
+    def __init__(self, mode: str, model_id: str, model_factory: Callable[[], Any]):
+        self.mode = mode
+        self.model_id = model_id
+        self._model_factory = model_factory
+
+    def build_agent(self, toolbox: Toolbox) -> Any:
+        from strands import Agent
+
+        return Agent(model=self._model_factory(), tools=toolbox.strands_tools(), system_prompt=SYSTEM_PROMPT,
+                     callback_handler=None)
+
+    def propose(self, request: EngineRequest, toolbox: Toolbox) -> Proposal:
+        agent = self.build_agent(toolbox)
+        prompt = ("Current NCR " + request.ncr["id"] + " (" + request.ncr.get("area", "") + "):\n" + _query(request.ncr)
+                  + "\nCurrent-lot evidence registered: " + (", ".join(e.id for e in request.current_evidence) or "none"))
+        # structured_output_model per invocation, as in strands-agents 1.61.1 (Agent.structured_output is deprecated).
+        # TODO(verify): structured output with the chosen Bedrock model in a real account.
+        result = agent(prompt, structured_output_model=Proposal)
+        output = result.structured_output
+        if not isinstance(output, Proposal):
+            raise RuntimeError("Model did not return a structured proposal.")
+        return output
+
+
+def bedrock_model_factory(settings: Settings) -> Callable[[], Any]:
+    def create() -> Any:
+        from strands.models import BedrockModel
+
+        # Credentials come from the default AWS credential chain; nothing is passed or logged here.
+        # TODO(verify): model access for settings.model_id is enabled in settings.region for the account.
+        return BedrockModel(model_id=settings.model_id, region_name=settings.region)
+
+    return create
+
+
+MODEL_FACTORIES: dict[str, Callable[[Settings], Callable[[], Any]]] = {
+    "bedrock": bedrock_model_factory,
+}
+PLANNED_MODES = {"sap": "SAP AI Core"}
+
+
+def create_engine(settings: Settings) -> Engine:
+    if settings.mode == "mock":
+        return MockEngine()
+    if settings.mode in MODEL_FACTORIES:
+        if not settings.model_id:
+            raise ValueError("AGENT_MODEL_ID is required when AGENT_MODE=" + settings.mode + ".")
+        return StrandsEngine(settings.mode, settings.model_id, MODEL_FACTORIES[settings.mode](settings))
+    if settings.mode in PLANNED_MODES:
+        raise NotImplementedError("AGENT_MODE=" + settings.mode + " (" + PLANNED_MODES[settings.mode] + ") is planned but not implemented.")
+    raise ValueError("Unknown AGENT_MODE " + repr(settings.mode) + ". Use mock or bedrock.")
