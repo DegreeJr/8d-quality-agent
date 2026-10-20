@@ -78,4 +78,3 @@ Current result and its limit are recorded in VERIFICATION.md.
 For API integration, replace provider mutations with an API-backed repository while retaining domain types and workflow validation. Human approvals must eventually be enforced by a backend with authenticated identities, immutable audit storage, and objective evidence records.
 
 Overdue labels compare action due dates with today's date. The seed dataset represents an October 2026 demo snapshot.
-"# 8d-quality-agent" 
