@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { hitAtK, KeywordRetriever, tokenize } from '../src/lib/retrieval';
 import type { EvidenceRecord } from '../src/lib/types';
+import { history } from '../src/lib/data';
 import type { EvalCase, SyntheticNcr } from '../scripts/synthetic-types';
 
 const read = <T>(name: string): T => JSON.parse(readFileSync(join(process.cwd(), 'data', name), 'utf8')) as T;
@@ -48,4 +49,18 @@ test('synthetic dataset is consistent', () => {
     for (const c of evalSet)
         assert.equal(byId.get(c.id)?.rootCauseCode, c.knownRootCauseCode, c.id + ' known root cause matches the corpus');
     assert.equal(new Set(evalSet.map(c => c.knownRootCauseCode)).size, new Set(ncrs.map(n => n.rootCauseCode)).size, 'every root cause family is in the eval set');
+});
+
+test('UI historical cases are anchors of the corpus and never held out', () => {
+    const ncrs = read<SyntheticNcr[]>('synthetic-ncrs.json');
+    const registry = read<EvidenceRecord[]>('evidence-registry.json');
+    const evalIds = new Set(read<EvalCase[]>('eval-set.json').map(c => c.id));
+    for (const h of history) {
+        const record = ncrs.find(n => n.id === h.id);
+        assert.ok(record, h.id + ' is in the corpus');
+        assert.equal(record.confirmedRootCause, h.rootCause);
+        assert.ok(!evalIds.has(h.id), h.id + ' is not held out');
+        for (const id of record.evidenceIds)
+            assert.equal(registry.find(r => r.id === id)?.ncrId, h.id, id + ' is in the corpus registry');
+    }
 });

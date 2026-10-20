@@ -1,12 +1,14 @@
 // Generates a deterministic synthetic NCR corpus, its evidence registry and a held-out eval set.
+// The corpus is 195 generated NCRs plus the 5 UI historical cases from data/anchor-history.json.
 // Usage: npm run data:generate   (writes data/synthetic-ncrs.json, data/evidence-registry.json, data/eval-set.json)
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { EvidenceRecord, Severity } from '../src/lib/types';
-import type { Area, EvalCase, SyntheticNcr } from './synthetic-types';
+import type { AnchorFile, Area, EvalCase, SyntheticNcr } from './synthetic-types';
 
 const SEED = 20261031;
-const TOTAL = 200;
+const GENERATED = 195;
+const PER_YEAR = 100;
 const EVAL_SIZE = 30;
 
 // mulberry32: small seeded PRNG, same sequence on every run.
@@ -242,10 +244,10 @@ function addDays(date: string, days: number) {
 const ncrs: SyntheticNcr[] = [];
 const registry: EvidenceRecord[] = [];
 // Each family gets 12 or 13 cases, in a shuffled order.
-const familyOrder = shuffle(Array.from({ length: TOTAL }, (_, i) => families[i % families.length]));
+const familyOrder = shuffle(Array.from({ length: GENERATED }, (_, i) => families[i % families.length]));
 familyOrder.forEach((family, i) => {
-    const year = i < TOTAL / 2 ? 2023 : 2024;
-    const seq = (i % (TOTAL / 2)) + 1;
+    const year = i < PER_YEAR ? 2023 : 2024;
+    const seq = (i % PER_YEAR) + 1;
     const id = 'NCR-' + year + '-' + pad(seq, 3);
     const language = rng() < 0.5 ? 'en' : 'id';
     const info = areaInfo[family.area];
@@ -282,11 +284,16 @@ familyOrder.forEach((family, i) => {
         language
     });
 });
+const dir = join(process.cwd(), 'data');
+const anchors = JSON.parse(readFileSync(join(dir, 'anchor-history.json'), 'utf8')) as AnchorFile;
+const anchorIds = new Set(anchors.ncrs.map(n => n.id));
+ncrs.push(...anchors.ncrs);
+registry.push(...anchors.evidence);
 ncrs.sort((a, b) => a.id.localeCompare(b.id));
 registry.sort((a, b) => a.id.localeCompare(b.id));
 
-// Stratified hold-out: one case per root cause family, the rest drawn at random.
-const shuffled = shuffle(ncrs);
+// Stratified hold-out: one case per root cause family, the rest drawn at random. Anchors always stay in the corpus.
+const shuffled = shuffle(ncrs.filter(n => !anchorIds.has(n.id)));
 const firstPerFamily = families.map(f => shuffled.find(n => n.rootCauseCode === f.code)!);
 const heldOut = [...firstPerFamily, ...shuffled.filter(n => !firstPerFamily.includes(n))].slice(0, EVAL_SIZE);
 const evalSet: EvalCase[] = heldOut.sort((a, b) => a.id.localeCompare(b.id)).map(n => ({
@@ -297,10 +304,9 @@ const evalSet: EvalCase[] = heldOut.sort((a, b) => a.id.localeCompare(b.id)).map
     knownRootCause: n.confirmedRootCause
 }));
 
-const dir = join(process.cwd(), 'data');
 mkdirSync(dir, { recursive: true });
 const write = (name: string, value: unknown) => writeFileSync(join(dir, name), JSON.stringify(value, null, 2) + '\n');
 write('synthetic-ncrs.json', ncrs);
 write('evidence-registry.json', registry);
 write('eval-set.json', evalSet);
-console.log('seed ' + SEED + ': ' + ncrs.length + ' NCRs, ' + registry.length + ' evidence records, ' + evalSet.length + ' eval cases held out');
+console.log('seed ' + SEED + ': ' + ncrs.length + ' NCRs (' + anchors.ncrs.length + ' anchors), ' + registry.length + ' evidence records, ' + evalSet.length + ' eval cases held out');

@@ -47,6 +47,27 @@ export interface HistoricalCase {
     evidence: string;
     closed: string;
 }
+export type Area = 'Die casting' | 'CNC machining' | 'Assembly' | 'Coating';
+// A closed historical NCR in the retrieval corpus (data/synthetic-ncrs.json, data/anchor-history.json).
+export interface SyntheticNcr {
+    id: string;
+    title: string;
+    description: string;
+    area: Area;
+    defectCode: string;
+    category: string;
+    severity: Severity;
+    lot: string;
+    quantity: number;
+    containment: string;
+    confirmedRootCause: string;
+    // Root cause family label; the ground truth for retrieval evaluation.
+    rootCauseCode: string;
+    correctiveAction: string;
+    evidenceIds: string[];
+    closedDate: string;
+    language: 'en' | 'id';
+}
 // An objective evidence record (trial report, gauge study, teardown, ...) owned by one NCR.
 export interface EvidenceRecord {
     id: string;

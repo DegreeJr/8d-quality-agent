@@ -1,26 +1,11 @@
-import type { Severity } from '../src/lib/types';
+import type { Area, EvidenceRecord, SyntheticNcr } from '../src/lib/types';
 
-export type Area = 'Die casting' | 'CNC machining' | 'Assembly' | 'Coating';
+export type { Area, SyntheticNcr };
 
-// A closed historical NCR in the synthetic corpus.
-export interface SyntheticNcr {
-    id: string;
-    title: string;
-    description: string;
-    area: Area;
-    defectCode: string;
-    category: string;
-    severity: Severity;
-    lot: string;
-    quantity: number;
-    containment: string;
-    confirmedRootCause: string;
-    // Root cause family label; the ground truth for retrieval evaluation.
-    rootCauseCode: string;
-    correctiveAction: string;
-    evidenceIds: string[];
-    closedDate: string;
-    language: 'en' | 'id';
+// The five historical cases shown in the UI. They are part of the corpus and never held out.
+export interface AnchorFile {
+    ncrs: SyntheticNcr[];
+    evidence: EvidenceRecord[];
 }
 
 // A held-out NCR: the query is what an engineer has at D4, the known root cause is the answer.
