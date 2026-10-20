@@ -16,6 +16,7 @@ class ScriptedEngine:
 
     mode = "scripted"
     model_id = None
+    model_name = None
 
     def __init__(self, build):
         self._build = build

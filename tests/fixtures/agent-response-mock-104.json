@@ -2,6 +2,7 @@
   "status": "success",
   "mode": "mock",
   "model_id": null,
+  "model_name": null,
   "ncr_id": "NCR-2026-104",
   "proposal": {
     "root_cause": "Hypothesis (historical, not validated): Vent channel blockage confirmed by tooling inspection, as recorded in NCR-2025-084, NCR-2023-002, NCR-2023-007.",

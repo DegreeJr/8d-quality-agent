@@ -14,6 +14,7 @@ from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from .config import Settings
 from .corpus import Corpus
 from .engines import Engine, create_engine
+from .sap import SapAuthError, SapConfigError
 from .service import RequestError, propose_root_cause
 
 logger = logging.getLogger("quality_agent")
@@ -25,7 +26,8 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     retriever = corpus.keyword_retriever()
     engine = engine or create_engine(settings)
     # Only non-secret settings are logged.
-    logger.info("quality agent: mode=%s model_id=%s region=%s corpus=%d", engine.mode, engine.model_id, settings.region, len(corpus.ncrs))
+    logger.info("quality agent: mode=%s model_id=%s model_name=%s region=%s corpus=%d", engine.mode, engine.model_id,
+                engine.model_name, settings.region, len(corpus.ncrs))
 
     app = BedrockAgentCoreApp()
 
@@ -34,7 +36,14 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
         try:
             return propose_root_cause(payload, engine, corpus, retriever)
         except RequestError as e:
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "error_type": "request", "error": str(e)}
+        except (SapConfigError, SapAuthError) as e:
+            # These messages are built without secrets or tokens.
+            logger.error("invocation failed: %s", type(e).__name__)
+            return {"status": "error", "error_type": "model", "error": str(e)}
+        except Exception as e:  # noqa: BLE001 - provider errors may carry response text; report only the type.
+            logger.error("invocation failed: %s", type(e).__name__)
+            return {"status": "error", "error_type": "model", "error": "Model call failed (" + type(e).__name__ + ")."}
 
     return app
 

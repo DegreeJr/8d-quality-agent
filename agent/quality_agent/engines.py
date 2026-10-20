@@ -2,8 +2,8 @@
 
 - mock:    deterministic, uses the same tools, no model and no AWS calls (default).
 - bedrock: a Strands agent backed by Amazon Bedrock.
-- sap:     planned (SAP AI Core). Add a factory to MODEL_FACTORIES that returns a Strands Model,
-           or implement Engine directly if the provider does not fit Strands. Not implemented.
+- sap:     a Strands agent backed by an OpenAI-format deployment on SAP AI Core (see sap.py).
+A new provider adds an entry to MODEL_PROVIDERS returning a ModelSpec, or implements Engine directly.
 """
 
 from __future__ import annotations
@@ -35,6 +35,7 @@ class EngineRequest:
 class Engine(Protocol):
     mode: str
     model_id: str | None
+    model_name: str | None
 
     def propose(self, request: EngineRequest, toolbox: Toolbox) -> Proposal: ...
 
@@ -48,6 +49,7 @@ class MockEngine:
 
     mode = "mock"
     model_id = None
+    model_name = None
 
     def propose(self, request: EngineRequest, toolbox: Toolbox) -> Proposal:
         results = toolbox.search_similar_ncr(_query(request.ncr))["results"]
@@ -77,18 +79,28 @@ Rules:
 - The output is a hypothesis for an engineer to validate, not a confirmed cause."""
 
 
-class StrandsEngine:
-    """A Strands agent with the two tools. The model comes from a factory so any Strands model provider fits."""
+@dataclass(frozen=True)
+class ModelSpec:
+    """What a provider contributes: identifiers for the response and a factory for a Strands Model."""
 
-    def __init__(self, mode: str, model_id: str, model_factory: Callable[[], Any]):
+    model_id: str
+    model_name: str | None
+    create: Callable[[], Any] = field(repr=False)
+
+
+class StrandsEngine:
+    """A Strands agent with the two tools. The model comes from a ModelSpec so any Strands model provider fits."""
+
+    def __init__(self, mode: str, spec: ModelSpec):
         self.mode = mode
-        self.model_id = model_id
-        self._model_factory = model_factory
+        self.model_id = spec.model_id
+        self.model_name = spec.model_name
+        self._create_model = spec.create
 
     def build_agent(self, toolbox: Toolbox) -> Any:
         from strands import Agent
 
-        return Agent(model=self._model_factory(), tools=toolbox.strands_tools(), system_prompt=SYSTEM_PROMPT,
+        return Agent(model=self._create_model(), tools=toolbox.strands_tools(), system_prompt=SYSTEM_PROMPT,
                      callback_handler=None)
 
     def propose(self, request: EngineRequest, toolbox: Toolbox) -> Proposal:
@@ -96,7 +108,7 @@ class StrandsEngine:
         prompt = ("Current NCR " + request.ncr["id"] + " (" + request.ncr.get("area", "") + "):\n" + _query(request.ncr)
                   + "\nCurrent-lot evidence registered: " + (", ".join(e.id for e in request.current_evidence) or "none"))
         # structured_output_model per invocation, as in strands-agents 1.61.1 (Agent.structured_output is deprecated).
-        # TODO(verify): structured output with the chosen Bedrock model in a real account.
+        # TODO(verify): structured output with the chosen model in a real account.
         result = agent(prompt, structured_output_model=Proposal)
         output = result.structured_output
         if not isinstance(output, Proposal):
@@ -104,30 +116,36 @@ class StrandsEngine:
         return output
 
 
-def bedrock_model_factory(settings: Settings) -> Callable[[], Any]:
+def bedrock_model_spec(settings: Settings) -> ModelSpec:
+    if not settings.model_id:
+        raise ValueError("AGENT_MODEL_ID is required when AGENT_MODE=bedrock.")
+    model_id = settings.model_id
+
     def create() -> Any:
         from strands.models import BedrockModel
 
         # Credentials come from the default AWS credential chain; nothing is passed or logged here.
-        # TODO(verify): model access for settings.model_id is enabled in settings.region for the account.
-        return BedrockModel(model_id=settings.model_id, region_name=settings.region)
+        # TODO(verify): model access for the model id is enabled in settings.region for the account.
+        return BedrockModel(model_id=model_id, region_name=settings.region)
 
-    return create
+    return ModelSpec(model_id=model_id, model_name=None, create=create)
 
 
-MODEL_FACTORIES: dict[str, Callable[[Settings], Callable[[], Any]]] = {
-    "bedrock": bedrock_model_factory,
+def sap_spec(settings: Settings) -> ModelSpec:
+    from .sap import sap_model_spec
+
+    return sap_model_spec(settings)
+
+
+MODEL_PROVIDERS: dict[str, Callable[[Settings], ModelSpec]] = {
+    "bedrock": bedrock_model_spec,
+    "sap": sap_spec,
 }
-PLANNED_MODES = {"sap": "SAP AI Core"}
 
 
 def create_engine(settings: Settings) -> Engine:
     if settings.mode == "mock":
         return MockEngine()
-    if settings.mode in MODEL_FACTORIES:
-        if not settings.model_id:
-            raise ValueError("AGENT_MODEL_ID is required when AGENT_MODE=" + settings.mode + ".")
-        return StrandsEngine(settings.mode, settings.model_id, MODEL_FACTORIES[settings.mode](settings))
-    if settings.mode in PLANNED_MODES:
-        raise NotImplementedError("AGENT_MODE=" + settings.mode + " (" + PLANNED_MODES[settings.mode] + ") is planned but not implemented.")
-    raise ValueError("Unknown AGENT_MODE " + repr(settings.mode) + ". Use mock or bedrock.")
+    if settings.mode in MODEL_PROVIDERS:
+        return StrandsEngine(settings.mode, MODEL_PROVIDERS[settings.mode](settings))
+    raise ValueError("Unknown AGENT_MODE " + repr(settings.mode) + ". Use mock, bedrock or sap.")

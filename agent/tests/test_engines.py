@@ -1,7 +1,7 @@
 import pytest
 
 from quality_agent.config import Settings
-from quality_agent.engines import MockEngine, StrandsEngine, create_engine
+from quality_agent.engines import MockEngine, ModelSpec, StrandsEngine, create_engine
 from quality_agent.tools import Toolbox
 
 
@@ -32,8 +32,8 @@ def test_bedrock_engine_does_not_create_a_model_until_used():
     assert (engine.mode, engine.model_id) == ("bedrock", "example.model-id")
 
 
-def test_sap_is_planned_not_implemented():
-    with pytest.raises(NotImplementedError, match="SAP AI Core"):
+def test_sap_requires_deployment_id_and_key_file():
+    with pytest.raises(ValueError, match="SAP_DEPLOYMENT_ID is required"):
         create_engine(settings("sap"))
 
 
@@ -60,7 +60,7 @@ def test_strands_agent_is_wired_with_both_tools(corpus):
         def stream(self, *args, **kwargs):
             raise AssertionError("not called")
 
-    engine = StrandsEngine("test", "stub", lambda: Stub())
+    engine = StrandsEngine("test", ModelSpec(model_id="stub", model_name=None, create=lambda: Stub()))
     agent = engine.build_agent(Toolbox(corpus, corpus.keyword_retriever()))
     assert sorted(agent.tool_names) == ["get_ncr", "search_similar_ncr"]
 

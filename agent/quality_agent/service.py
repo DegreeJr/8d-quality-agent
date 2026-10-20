@@ -67,6 +67,7 @@ def propose_root_cause(payload: Any, engine: Engine, corpus: Corpus, retriever: 
         "status": "success",
         "mode": engine.mode,
         "model_id": engine.model_id,
+        "model_name": engine.model_name,
         "ncr_id": request.ncr["id"],
         "proposal": final.model_dump(),
         # Kept for audit when the check rejects the model output.
