@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { validateRootCause, ValidationIssueCode } from '../src/lib/validator';
+import { createInitialState, sectionDraft } from '../src/lib/data';
+import { reviewSection, rootCauseCheck, rootCauseAuditAction, RootCauseRejectedError } from '../src/lib/workflow';
 
 const retrieved = ['NCR-2025-084', 'NCR-2026-019'];
 const codes = (text: string, ids: readonly string[] = retrieved, currentNcrId?: string): ValidationIssueCode[] => validateRootCause(text, ids, { currentNcrId }).issues.map(i => i.code);
@@ -78,4 +80,34 @@ test('rules combine: generic claim with nothing retrieved fails B and C', () => 
 test('valid evidence-backed text passes', () => {
     const text = 'Candidate precedents (historical, not validated): NCR-2025-084, NCR-2026-019. Vent channel blockage reproduced in controlled trial TR-104; parameter log PL-104 matches.';
     assert.deepEqual(validateRootCause(text, retrieved), { ok: true, issues: [] });
+});
+
+test('D4 drafts list retrieved precedents by id and pass the validator', () => {
+    const s = createInitialState();
+    const n = s.ncrs.find(n => n.id === 'NCR-2026-104')!;
+    const draft = sectionDraft(n, 3);
+    assert.match(draft, /^Candidate precedents \(historical, not validated\): NCR-2025-084 .*; NCR-2026-019 /);
+    for (const ncr of s.ncrs)
+        assert.deepEqual(rootCauseCheck(s, ncr.id, sectionDraft(ncr, 3)).issues, [], ncr.id);
+});
+
+test('reviewSection refuses to approve D4 when the root cause check fails', () => {
+    const s = createInitialState();
+    s.reports[0].sections[3] = { content: 'root cause: human error', status: 'Draft' };
+    assert.throws(() => reviewSection(s, 'NCR-2026-104', 3, true, 'TR-104 reviewed'), (e: unknown) => e instanceof RootCauseRejectedError && e.issues.some(i => i.code === 'GENERIC_CLAIM_UNSUPPORTED'));
+    const returned = reviewSection(s, 'NCR-2026-104', 3, false, 'Unsupported generic claim');
+    assert.equal(returned.reports[0].sections[3].status, 'Rejected', 'requesting revision is still allowed');
+});
+
+test('reviewSection refuses a D4 root cause when nothing was retrieved', () => {
+    const s = createInitialState();
+    const i = s.reports.findIndex(r => r.ncrId === 'NCR-2026-100');
+    s.reports[i].sections = s.reports[i].sections.map((x, d) => ({ ...x, status: d < 3 ? 'Complete' : 'Draft', content: d === 3 ? 'Root cause is low cure temperature.' : x.content }));
+    assert.throws(() => reviewSection(s, 'NCR-2026-100', 3, true, 'Reviewed'), /ROOT_CAUSE|No historical evidence/);
+});
+
+test('validator audit actions name the trigger and issue codes', () => {
+    const issues = validateRootCause('root cause: human error', []).issues;
+    assert.equal(rootCauseAuditAction(3, 'approval', issues), 'Root cause check rejected D4 approval: GENERIC_CLAIM_UNSUPPORTED, ROOT_CAUSE_WITHOUT_EVIDENCE.');
+    assert.equal(rootCauseAuditAction(3, 'saved', issues.slice(0, 1)), 'Root cause check rejected D4 saved draft: GENERIC_CLAIM_UNSUPPORTED.');
 });
