@@ -23,6 +23,8 @@ export interface AgentResponse {
     status: 'success';
     mode: string;
     model_id: string | null;
+    // Human-readable model name when known, e.g. gpt-5.4 for an SAP AI Core deployment.
+    model_name?: string | null;
     ncr_id: string;
     proposal: AgentProposal;
     raw_proposal: AgentProposal | null;
@@ -59,13 +61,17 @@ export function parseAgentResponse(json: unknown): AgentResponse {
         throw new AgentError('Agent returned an invalid response.');
     if (r.status !== 'success')
         throw new AgentError(typeof r.error === 'string' ? r.error : 'Agent returned an error.');
-    if (typeof r.mode !== 'string' || typeof r.ncr_id !== 'string' || typeof r.accepted !== 'boolean' || !isProposal(r.proposal) || !Array.isArray(r.retrieved) || !r.retrieved.every(h => h && typeof h.id === 'string') || !r.validation || !Array.isArray(r.validation.issues))
+    if (typeof r.mode !== 'string' || typeof r.ncr_id !== 'string' || (r.model_name !== undefined && r.model_name !== null && typeof r.model_name !== 'string') || typeof r.accepted !== 'boolean' || !isProposal(r.proposal) || !Array.isArray(r.retrieved) || !r.retrieved.every(h => h && typeof h.id === 'string') || !r.validation || !Array.isArray(r.validation.issues))
         throw new AgentError('Agent response does not match the expected shape.');
     return r;
 }
 
-export function agentLabel(r: Pick<AgentResponse, 'mode' | 'model_id'>) {
-    return r.mode === 'mock' ? 'local agent, mock mode without a model' : r.mode + (r.model_id ? ' ' + r.model_id : '');
+export function agentLabel(r: Pick<AgentResponse, 'mode' | 'model_id' | 'model_name'>) {
+    if (r.mode === 'mock')
+        return 'local agent, mock mode without a model';
+    if (r.mode === 'sap')
+        return 'SAP AI Core (' + (r.model_name || r.model_id || 'unknown deployment') + ')';
+    return r.mode + (r.model_name || r.model_id ? ' ' + (r.model_name || r.model_id) : '');
 }
 
 // D4 draft text from an agent response. Rejected proposals become an "evidence missing" draft.

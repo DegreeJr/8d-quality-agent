@@ -19,6 +19,9 @@ export async function forwardToAgent(body: unknown, agentUrl: string = DEFAULT_A
     const json: unknown = await res.json().catch(() => null);
     if (!res.ok || !json || typeof json !== 'object')
         return { status: 502, body: { status: 'error', error: 'Agent returned HTTP ' + res.status + '.' } };
-    // The agent reports request problems in the body with status "error".
-    return { status: (json as { status?: string }).status === 'error' ? 400 : 200, body: json };
+    // The agent reports failures in the body: error_type "request" is a bad request, anything else a model or upstream failure.
+    const result = json as { status?: string; error_type?: string };
+    if (result.status !== 'error')
+        return { status: 200, body: json };
+    return { status: result.error_type === 'request' ? 400 : 502, body: json };
 }

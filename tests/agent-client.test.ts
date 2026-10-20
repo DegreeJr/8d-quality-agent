@@ -43,6 +43,12 @@ test('a rejected proposal becomes an evidence-missing draft that passes the chec
     assert.equal(rootCauseCheck(s, 'NCR-2026-104', draft).ok, true);
 });
 
+test('SAP responses are labelled with the model name', () => {
+    const sap = parseAgentResponse({ ...contract, mode: 'sap', model_id: 'd1a82575de60e02a', model_name: 'gpt-5.4' });
+    assert.ok(agentDraft(sap).startsWith('Agent proposal (SAP AI Core (gpt-5.4), not validated): '));
+    assert.ok(agentDraft({ ...sap, model_name: null }).startsWith('Agent proposal (SAP AI Core (d1a82575de60e02a), not validated): '));
+});
+
 test('invalid agent responses are refused', () => {
     assert.throws(() => parseAgentResponse({ status: 'error', error: 'Unsupported action.' }), (e: unknown) => e instanceof AgentError && e.message === 'Unsupported action.');
     assert.throws(() => parseAgentResponse({ ...contract, proposal: { ...contract.proposal, confidence: 0.9 } }), AgentError);
@@ -62,7 +68,8 @@ test('proxy forwards to /invocations and maps agent errors', async () => {
     const capture = (async (u: string | URL | Request) => { url = String(u); return new Response(JSON.stringify(contract)); }) as typeof fetch;
     assert.equal((await forwardToAgent({ action: 'propose_root_cause' }, 'http://127.0.0.1:8080/', capture)).status, 200);
     assert.equal(url, 'http://127.0.0.1:8080/invocations');
-    assert.equal((await forwardToAgent({}, 'http://agent', fakeFetch(200, { status: 'error', error: 'bad' }))).status, 400);
+    assert.equal((await forwardToAgent({}, 'http://agent', fakeFetch(200, { status: 'error', error_type: 'request', error: 'bad' }))).status, 400);
+    assert.equal((await forwardToAgent({}, 'http://agent', fakeFetch(200, { status: 'error', error_type: 'model', error: 'SAP AI Core token request failed (HTTP 401).' }))).status, 502);
     assert.equal((await forwardToAgent({}, 'http://agent', fakeFetch(500, { detail: 'boom' }))).status, 502);
     const down = (async () => { throw new TypeError('fetch failed'); }) as typeof fetch;
     const result = await forwardToAgent({}, 'http://agent', down);
