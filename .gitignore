@@ -5,3 +5,4 @@ out/
 .env*
 .tools/
 .npm-cache/
+AGENTS.md
