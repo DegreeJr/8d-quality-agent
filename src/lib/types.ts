@@ -25,6 +25,8 @@ export interface ReportSection {
 export interface Report {
     ncrId: string;
     sections: ReportSection[];
+    // Historical NCRs the agent's tools returned for the last D4 proposal. Rule A uses these when present.
+    agentRetrieved?: { id: string; title: string; score: number | null }[];
 }
 export interface CAPA {
     id: string;

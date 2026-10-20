@@ -10,9 +10,12 @@ export class RootCauseRejectedError extends Error {
     }
 }
 // Runs the validator on D4 text against the historical NCRs retrieved for the case and the evidence registered to it.
+// After an agent proposal, the retrieved set is what the agent's tools returned, not the static seed list.
 export function rootCauseCheck(state: AppState, id: string, text: string): ValidationResult {
     const ncr = state.ncrs.find(n => n.id === id);
-    return validateRootCause(text, ncr?.evidence ?? [], { currentNcrId: id, evidenceRegistry });
+    const agentRetrieved = state.reports.find(r => r.ncrId === id)?.agentRetrieved;
+    const retrieved = agentRetrieved ? agentRetrieved.map(h => h.id) : ncr?.evidence ?? [];
+    return validateRootCause(text, retrieved, { currentNcrId: id, evidenceRegistry });
 }
 export function rootCauseAuditAction(step: number, trigger: 'generated' | 'saved' | 'approval', issues: ValidationIssue[]) {
     return 'Root cause check rejected D' + (step + 1) + (trigger === 'approval' ? ' approval' : ' ' + trigger + ' draft') + ': ' + issues.map(i => i.code).join(', ') + '.';
