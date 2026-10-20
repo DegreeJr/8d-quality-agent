@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/workflow.test.ts tests/validator.test.ts"
+    "test": "tsx --test tests/workflow.test.ts tests/validator.test.ts tests/retrieval.test.ts",
+    "data:generate": "tsx scripts/generate-synthetic-ncrs.ts",
+    "eval:retrieval": "tsx scripts/eval-retrieval.ts"
   },
   "dependencies": {
     "next": "^16.0.0",
