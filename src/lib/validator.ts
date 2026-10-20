@@ -119,6 +119,8 @@ const REJECTED_AFTER = new RegExp('^[\'"]?\\s*' + NO_NEGATION_WORD + '{0,3}?(?:'
     + '|(?:bukan|tidak\\s+(?:didukung|terbukti)|sudah\\s+dikesampingkan|dikesampingkan|ditolak)\\b)', 'i');
 const REJECTED_BEFORE = /(?:\bruled\s+out|\brejected|\bexcluded|\bno\s+evidence\s+(?:for|of)|\b(?:is|was)\s+not|\bbukan|\btidak\s+ada\s+bukti)\s+['"]?(?:[\w-]+\s+)?$/i;
 const STILL_OPEN = /\b(?:not|cannot|can't|never|belum|tidak)\s+(?:yet\s+)?(?:be\s+|bisa\s+|dapat\s+)?(?:ruled\s+out|excluded|rejected|dikesampingkan|ditolak)\b/i;
+// "not only X", "bukan satu-satunya penyebab" add X as a cause rather than rejecting it.
+const ADDITIVE = /\b(?:not\s+(?:only|just|merely|solely)|bukan\s+(?:hanya|cuma|sekadar|satu-satunya))\b/i;
 
 function phraseSource(phrase: string) {
     return escapeRegExp(phrase).replace(/\s+/g, '\\s+');
@@ -142,7 +144,7 @@ export function genericClaimsIn(text: string): string[] {
         const occurrences = [...sentence.matchAll(new RegExp('\\b' + phraseSource(phrase) + '\\b', 'gi'))];
         if (!occurrences.length)
             return false;
-        if (assertsAsCause(sentence, phrase) || STILL_OPEN.test(sentence))
+        if (assertsAsCause(sentence, phrase) || STILL_OPEN.test(sentence) || ADDITIVE.test(sentence))
             return true;
         return occurrences.some(m => {
             const start = m.index ?? 0;

@@ -815,6 +815,28 @@
       "expectedCodes": [
         "GENERIC_CLAIM_UNSUPPORTED"
       ]
+    },
+    {
+      "name": "B-smuggle: 'is not only X' still fails",
+      "text": "The root cause is not only human error.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "B-smuggle: Indonesian 'bukan satu-satunya penyebab' still fails",
+      "text": "Kesalahan operator bukan satu-satunya penyebab.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
     }
   ]
 }

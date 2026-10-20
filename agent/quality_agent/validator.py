@@ -127,6 +127,8 @@ _REJECTED_BEFORE = re.compile(
 _STILL_OPEN = re.compile(
     r"\b(?:not|cannot|can't|never|belum|tidak)\s+(?:yet\s+)?(?:be\s+|bisa\s+|dapat\s+)?"
     r"(?:ruled\s+out|excluded|rejected|dikesampingkan|ditolak)\b", _FLAGS)
+# "not only X", "bukan satu-satunya penyebab" add X as a cause rather than rejecting it.
+_ADDITIVE = re.compile(r"\b(?:not\s+(?:only|just|merely|solely)|bukan\s+(?:hanya|cuma|sekadar|satu-satunya))\b", _FLAGS)
 _LEAD = r"['\"]?(?:an?\s+|the\s+)?(?:(?!not\b|bukan\b|tidak\b)[\w-]+\s+){0,2}"
 
 
@@ -149,7 +151,7 @@ def generic_claims_in(text: str) -> list[str]:
         occurrences = list(re.finditer(r"\b" + _phrase_source(phrase) + r"\b", sentence, _FLAGS))
         if not occurrences:
             return False
-        if _asserts_as_cause(sentence, phrase) or _STILL_OPEN.search(sentence):
+        if _asserts_as_cause(sentence, phrase) or _STILL_OPEN.search(sentence) or _ADDITIVE.search(sentence):
             return True
         return any(not _REJECTED_AFTER.search(sentence[m.end():]) and not _REJECTED_BEFORE.search(sentence[:m.start()])
                    for m in occurrences)
