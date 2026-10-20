@@ -49,6 +49,18 @@ test('SAP responses are labelled with the model name', () => {
     assert.ok(agentDraft({ ...sap, model_name: null }).startsWith('Agent proposal (SAP AI Core (d1a82575de60e02a), not validated): '));
 });
 
+test('an unverified agent hypothesis says so and passes the check for an NCR without current-lot evidence', () => {
+    const r = parseAgentResponse({ ...contract, ncr_id: 'NCR-2026-100', proposal_status: 'unverified_hypothesis', retrieved: [{ id: 'NCR-2024-063', score: 10, title: 'Coating thickness below specification' }], proposal: { root_cause: 'Hypothesis (historical, not validated): worn spray gun nozzle, as recorded in NCR-2024-063.', cited_ncr_ids: ['NCR-2024-063'], confidence: 'medium', missing_data: ['No current-lot evidence is registered for NCR-2026-100.'] } });
+    const draft = agentDraft(r);
+    assert.ok(draft.includes('Status: unverified hypothesis, no current-lot evidence registered.'));
+    const s = createInitialState();
+    s.reports[s.reports.findIndex(x => x.ncrId === 'NCR-2026-100')].agentRetrieved = r.retrieved;
+    const check = rootCauseCheck(s, 'NCR-2026-100', draft);
+    assert.deepEqual(check.issues, []);
+    assert.equal(check.hypothesisStatus, 'unverified_hypothesis');
+    assert.throws(() => parseAgentResponse({ ...contract, proposal_status: 'confirmed' }), AgentError);
+});
+
 test('invalid agent responses are refused', () => {
     assert.throws(() => parseAgentResponse({ status: 'error', error: 'Unsupported action.' }), (e: unknown) => e instanceof AgentError && e.message === 'Unsupported action.');
     assert.throws(() => parseAgentResponse({ ...contract, proposal: { ...contract.proposal, confidence: 0.9 } }), AgentError);

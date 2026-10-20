@@ -9,6 +9,19 @@ export class RootCauseRejectedError extends Error {
         this.issues = issues;
     }
 }
+// Rule D: without registered current-lot evidence the D4 proposal is an unverified hypothesis and cannot be approved.
+export class UnverifiedHypothesisError extends Error {
+    constructor(id: string) {
+        super(d4ApprovalLock(id));
+        this.name = 'UnverifiedHypothesisError';
+    }
+}
+export function d4ApprovalLock(id: string) {
+    return 'D4 approval is locked: no current-lot evidence is registered for ' + id + ', so the root cause is an unverified hypothesis. Register current-lot evidence (for example a controlled trial report) first.';
+}
+export function isD4Locked(state: AppState, id: string) {
+    return rootCauseCheck(state, id, '').hypothesisStatus === 'unverified_hypothesis';
+}
 // Runs the validator on D4 text against the historical NCRs retrieved for the case and the evidence registered to it.
 // After an agent proposal, the retrieved set is what the agent's tools returned, not the static seed list.
 export function rootCauseCheck(state: AppState, id: string, text: string): ValidationResult {
@@ -29,5 +42,7 @@ export function reviewSection(state: AppState, id: string, step: number, approve
     const check = rootCauseCheck(state, id, report.sections[3].content);
     if (!check.ok)
         throw new RootCauseRejectedError(check.issues);
+    if (check.hypothesisStatus === 'unverified_hypothesis')
+        throw new UnverifiedHypothesisError(id);
 } if (step === 7 && state.capas.some(c => c.ncrId === id && c.status !== 'Completed'))
     throw new Error('Complete all linked CAPAs before closing the report.'); return { ...state, reports: state.reports.map(r => r.ncrId !== id ? r : { ...r, sections: r.sections.map((s, i) => i === step ? { ...s, status: approve ? (step === 3 || step === 4 ? 'Approved' : 'Complete') : 'Rejected', feedback } : i > step ? { ...s, status: s.content ? 'Draft' : 'Not started', feedback: undefined } : s) }), ncrs: state.ncrs.map(n => n.id !== id ? n : { ...n, status: approve && step === 7 ? 'Closed' : approve && step === 2 || approve && step === 3 ? 'Pending approval' : 'In progress' }) }; }

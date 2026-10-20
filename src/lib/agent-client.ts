@@ -26,6 +26,8 @@ export interface AgentResponse {
     // Human-readable model name when known, e.g. gpt-5.4 for an SAP AI Core deployment.
     model_name?: string | null;
     ncr_id: string;
+    // unverified_hypothesis: no current-lot evidence is registered for the NCR (Rule D).
+    proposal_status?: 'unverified_hypothesis' | 'hypothesis_with_current_evidence' | 'no_hypothesis';
     proposal: AgentProposal;
     raw_proposal: AgentProposal | null;
     retrieved: { id: string; score: number | null; title: string }[];
@@ -61,7 +63,7 @@ export function parseAgentResponse(json: unknown): AgentResponse {
         throw new AgentError('Agent returned an invalid response.');
     if (r.status !== 'success')
         throw new AgentError(typeof r.error === 'string' ? r.error : 'Agent returned an error.');
-    if (typeof r.mode !== 'string' || typeof r.ncr_id !== 'string' || (r.model_name !== undefined && r.model_name !== null && typeof r.model_name !== 'string') || typeof r.accepted !== 'boolean' || !isProposal(r.proposal) || !Array.isArray(r.retrieved) || !r.retrieved.every(h => h && typeof h.id === 'string') || !r.validation || !Array.isArray(r.validation.issues))
+    if (typeof r.mode !== 'string' || typeof r.ncr_id !== 'string' || (r.model_name !== undefined && r.model_name !== null && typeof r.model_name !== 'string') || (r.proposal_status !== undefined && !['unverified_hypothesis', 'hypothesis_with_current_evidence', 'no_hypothesis'].includes(r.proposal_status)) || typeof r.accepted !== 'boolean' || !isProposal(r.proposal) || !Array.isArray(r.retrieved) || !r.retrieved.every(h => h && typeof h.id === 'string') || !r.validation || !Array.isArray(r.validation.issues))
         throw new AgentError('Agent response does not match the expected shape.');
     return r;
 }
@@ -79,7 +81,8 @@ export function agentDraft(r: AgentResponse): string {
     const missing = r.proposal.missing_data.length ? ' Missing data: ' + r.proposal.missing_data.join(' ') : '';
     if (!r.accepted || !r.proposal.root_cause)
         return 'Evidence missing. ' + (r.accepted ? 'The agent (' + agentLabel(r) + ') found no supported hypothesis.' : 'The agent proposal (' + agentLabel(r) + ') was rejected by the root cause check: ' + r.validation.issues.map(i => i.code).join(', ') + '.') + missing;
-    return 'Agent proposal (' + agentLabel(r) + ', not validated): ' + r.proposal.root_cause + ' Cited: ' + r.proposal.cited_ncr_ids.join(', ') + '. Confidence: ' + r.proposal.confidence + '.' + missing;
+    const status = r.proposal_status === 'unverified_hypothesis' ? ' Status: unverified hypothesis, no current-lot evidence registered.' : '';
+    return 'Agent proposal (' + agentLabel(r) + ', not validated): ' + r.proposal.root_cause + ' Cited: ' + r.proposal.cited_ncr_ids.join(', ') + '. Confidence: ' + r.proposal.confidence + '.' + status + missing;
 }
 
 export async function proposeRootCause(request: AgentRequest, fetchImpl: typeof fetch = fetch): Promise<AgentResponse> {

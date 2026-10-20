@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { validateRootCause } from '../src/lib/validator';
 import { createInitialState, evidenceRegistry, history, sectionDraft } from '../src/lib/data';
-import { reviewSection, rootCauseCheck, rootCauseAuditAction, RootCauseRejectedError } from '../src/lib/workflow';
+import { isD4Locked, reviewSection, rootCauseCheck, rootCauseAuditAction, RootCauseRejectedError, UnverifiedHypothesisError } from '../src/lib/workflow';
 
 // Rule cases are shared with the Python port (agent/tests/test_validator.py).
 interface FixtureCase {
@@ -15,6 +15,8 @@ interface FixtureCase {
     registry?: string;
     expectedCodes: string[];
     messageIncludes?: string[];
+    expectedStatus?: string;
+    missingData?: string[];
 }
 const fixture = JSON.parse(readFileSync(join(process.cwd(), 'tests', 'fixtures', 'validator-cases.json'), 'utf8')) as {
     registries: Record<string, { id: string; ncrId: string }[]>;
@@ -23,9 +25,11 @@ const fixture = JSON.parse(readFileSync(join(process.cwd(), 'tests', 'fixtures',
 
 for (const c of fixture.cases)
     test('fixture: ' + c.name, () => {
-        const result = validateRootCause(c.text, c.retrieved, { currentNcrId: c.currentNcrId, evidenceRegistry: c.registry ? fixture.registries[c.registry] : undefined });
+        const result = validateRootCause(c.text, c.retrieved, { currentNcrId: c.currentNcrId, evidenceRegistry: c.registry ? fixture.registries[c.registry] : undefined, missingData: c.missingData });
         assert.deepEqual(result.issues.map(i => i.code), c.expectedCodes);
         assert.equal(result.ok, c.expectedCodes.length === 0);
+        if (c.expectedStatus)
+            assert.equal(result.hypothesisStatus, c.expectedStatus);
         const messages = result.issues.map(i => i.message).join(' ');
         for (const part of c.messageIncludes ?? [])
             assert.ok(messages.includes(part), 'message includes "' + part + '": ' + messages);
@@ -79,4 +83,16 @@ test('evidence registry is consistent with the dataset', () => {
     for (const h of history)
         for (const id of h.evidence.match(/\b[A-Z]+-\d{3}\b/g) ?? [])
             assert.equal(evidenceRegistry.find(r => r.id === id)?.ncrId, h.id, id + ' is registered to ' + h.id);
+});
+
+test('rule D: D4 approval is locked without registered current-lot evidence', () => {
+    const s = createInitialState();
+    assert.equal(isD4Locked(s, 'NCR-2026-100'), true);
+    assert.equal(isD4Locked(s, 'NCR-2026-104'), false);
+    const i = s.reports.findIndex(r => r.ncrId === 'NCR-2026-100');
+    s.reports[i].agentRetrieved = [{ id: 'NCR-2024-063', title: 'Coating thickness below specification', score: 10 }];
+    s.reports[i].sections = s.reports[i].sections.map((x, d) => ({ ...x, status: d < 3 ? 'Complete' : 'Draft', content: d === 3 ? 'Hypothesis (historical, not validated): worn spray gun nozzle, as recorded in NCR-2024-063.' : x.content }));
+    assert.equal(rootCauseCheck(s, 'NCR-2026-100', s.reports[i].sections[3].content).ok, true, 'the hypothesis itself is allowed');
+    assert.throws(() => reviewSection(s, 'NCR-2026-100', 3, true, 'Reviewed'), (e: unknown) => e instanceof UnverifiedHypothesisError && /no current-lot evidence is registered for NCR-2026-100/.test((e as Error).message));
+    assert.equal(reviewSection(s, 'NCR-2026-100', 3, false, 'Need a controlled trial').reports[i].sections[3].status, 'Rejected', 'requesting revision still works');
 });
