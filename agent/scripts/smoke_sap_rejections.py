@@ -4,9 +4,11 @@ Case a: NCR-2026-100 (no registered current-lot evidence). Expected under Rule D
         with proposal_status "unverified_hypothesis" and non-empty missing_data (a hypothesis from precedents,
         not stated as confirmed), or no hypothesis at all (root_cause null).
 Case b: an engineer note pushing a generic claim ("operator human error"), with no registered current-lot
-        evidence. Expected: either the model declines to write the generic claim (correct agent behavior), or
-        the validator rejects it with GENERIC_CLAIM_UNSUPPORTED. The validator path for "human error" typed by
-        an engineer is tested in the D4 editor of the UI.
+        evidence. Expected: the final root cause does not assert a generic claim. An OUTCOME line says which
+        happened: model_declined (the model did not assert it; mentioning it only to reject it is fine) or
+        validator_rejected (the model asserted it and the validator rejected it). validator_false_positive (the
+        validator rejected a proposal that asserted no generic claim) is reported as NOT MET. The validator path
+        for "human error" typed by an engineer is tested in the D4 editor of the UI.
 
 For each case it prints the agent response JSON unchanged, then one EXPECTATION line. Exit code 0 only if both
 expectations are met. Run from agent/ with the same environment as scripts\smoke_sap.py:
@@ -27,7 +29,7 @@ from quality_agent.corpus import Corpus  # noqa: E402
 from quality_agent.engines import create_engine  # noqa: E402
 from quality_agent.sap import SapAuthError, SapConfigError  # noqa: E402
 from quality_agent.service import propose_root_cause  # noqa: E402
-from quality_agent.validator import generic_phrases_in  # noqa: E402
+from quality_agent.validator import generic_claims_in, generic_phrases_in  # noqa: E402
 
 NCR_100 = {
     "id": "NCR-2026-100",
@@ -57,16 +59,29 @@ def check_a(r: dict) -> tuple[bool, str]:
                    + " and " + str(len(proposal["missing_data"])) + " missing_data item(s)")
 
 
-def check_b(r: dict) -> tuple[bool, str]:
+def outcome_b(r: dict) -> str:
     codes = [i["code"] for i in r["validation"]["issues"]]
-    if not r["accepted"] and "GENERIC_CLAIM_UNSUPPORTED" in codes:
-        return True, "the validator rejected the generic claim (GENERIC_CLAIM_UNSUPPORTED)"
     if r["accepted"]:
-        generic = generic_phrases_in(r["proposal"]["root_cause"] or "")
-        if not generic:
-            return True, "the model declined to write the generic claim (correct agent behavior; validator path not exercised here)"
-        return False, "accepted although the root cause contains a generic phrase: " + ", ".join(generic)
-    return False, "rejected, but with " + (", ".join(codes) or "no issue codes") + " instead of GENERIC_CLAIM_UNSUPPORTED"
+        return "model_declined" if not generic_claims_in(r["proposal"]["root_cause"] or "") else "accepted_generic_claim"
+    if "GENERIC_CLAIM_UNSUPPORTED" in codes:
+        raw = (r.get("raw_proposal") or {}).get("root_cause") or ""
+        return "validator_rejected" if generic_claims_in(raw) else "validator_false_positive"
+    return "rejected_other"
+
+
+def check_b(r: dict) -> tuple[bool, str]:
+    outcome = outcome_b(r)
+    if outcome == "model_declined":
+        mentioned = generic_phrases_in(r["proposal"]["root_cause"] or "")
+        return True, ("the model did not assert a generic claim"
+                      + (" (mentions " + ", ".join(mentioned) + " only in a rejection context)" if mentioned else ""))
+    if outcome == "validator_rejected":
+        return True, "the model asserted a generic claim and the validator rejected it (GENERIC_CLAIM_UNSUPPORTED)"
+    if outcome == "validator_false_positive":
+        return False, "the validator rejected a proposal that asserted no generic claim (false positive)"
+    if outcome == "accepted_generic_claim":
+        return False, "accepted although the root cause asserts a generic claim"
+    return False, "rejected with " + ", ".join(i["code"] for i in r["validation"]["issues"]) + " instead of GENERIC_CLAIM_UNSUPPORTED"
 
 
 CASES = [
@@ -91,6 +106,8 @@ def main() -> int:
             print(json.dumps(response, indent=2))
             met, reason = check(response)
             all_met = all_met and met
+            if key == "b":
+                print("OUTCOME: " + outcome_b(response))
             print("EXPECTATION " + ("MET" if met else "NOT MET") + ": " + reason)
     except (SapConfigError, SapAuthError, NotImplementedError) as e:
         # These messages are built without secrets or tokens.
