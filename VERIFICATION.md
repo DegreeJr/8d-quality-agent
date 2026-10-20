@@ -16,13 +16,17 @@ Last verified: 2026-10-20, branch `feat/validator-and-data`, Windows 11, Node.js
 - SAP AI Core smoke test (2026-10-21, run by the team with the real service key; result reported to the agent, raw output not seen by the agent): `agent/scripts/smoke_sap.py` for NCR-2026-104 returned mode `sap`, model gpt-5.4, `accepted: true`, validation ok, cited NCR-2025-084 and NCR-2023-002, both in `retrieved`. One run; output is model-generated and can differ between runs.
 - SAP AI Core rejection smoke test (2026-10-21, early morning, run by the team, mode sap, gpt-5.4; raw output pasted to the agent and recorded verbatim at the end of this file):
   - Case a, NCR-2026-100 without current-lot evidence: `proposal_status: unverified_hypothesis`, accepted, validation ok, five `missing_data` items, cited NCR-2024-063, NCR-2023-030 and NCR-2024-049, all in `retrieved`. Expectation met.
-  - Case b, engineer note pushing "operator human error": the script printed "EXPECTATION MET", but this was a false positive. The model's `raw_proposal` rejected the generic claim ("The requested 'operator human error' cause is not supported because ..."); Rule B matched the phrase alone and rejected the proposal. Fixed the same day: Rule B now ignores generic phrases that are themselves rejected or negated (TS and Python, shared fixture including this exact text), and the script reports an OUTCOME and treats a validator false positive as NOT MET. Replaying the reported response through the updated check gives `validator_false_positive`; the same raw text passes the fixed validator as `unverified_hypothesis`. A new SAP run of the updated script has not been done.
+  - Case b, engineer note pushing "operator human error": the script printed "EXPECTATION MET", but this was a false positive. The model's `raw_proposal` rejected the generic claim ("The requested 'operator human error' cause is not supported because ..."); Rule B matched the phrase alone and rejected the proposal. Fixed the same day: Rule B now ignores generic phrases that are themselves rejected or negated (TS and Python, shared fixture including this exact text), and the script reports an OUTCOME and treats a validator false positive as NOT MET. Replaying the reported response through the updated check gives `validator_false_positive`; the same raw text passes the fixed validator as `unverified_hypothesis`.
+- SAP AI Core rejection smoke test, re-run after the Rule B fix (2026-10-21, run by the team, mode sap, gpt-5.4; output pasted to the agent as a field summary and recorded verbatim at the end of this file):
+  - Case a: `proposal_status: unverified_hypothesis`, accepted, validation ok, 5 `missing_data` items, cited NCR-2024-063, NCR-2023-030 and NCR-2024-049, all in `retrieved`. EXPECTATION MET.
+  - Case b: `proposal_status: unverified_hypothesis`, accepted, validation ok, `raw_proposal` null, cited NCR-2025-084, NCR-2023-002 and NCR-2023-007, all in `retrieved`. OUTCOME `model_declined`, EXPECTATION MET.
+  - Note: in this run the model put its rejection of "operator human error" in `missing_data`, not in `root_cause`, so the Rule B negation-context path was not exercised by this run. That path is covered by the shared fixture case built from the exact `raw_proposal` text of the earlier run.
 - `npm run dev` (checked 2026-10-20 before the Phase 1 changes): every route (`/`, `/workspace`, `/ncr`, `/capa`, `/knowledge`, `/audit`) returned HTTP 200 and the dev server log showed no errors.
 
 ## Not verified
 
 - No browser click testing has been done by the agent. The Claude in Chrome extension was not connected, so saving, approving, generating (simulated or agent), the live Root cause check panel, the disabled Approve button, audit events and localStorage persistence have not been exercised in a browser. Use the manual checklist below.
-- SAP AI Core beyond the one smoke test above: `AGENT_MODE=sap` is otherwise covered by unit tests with mocked HTTP and fake keys (token request, endpoint, headers, api-version, a full Strands tool loop, validator enforcement, no secrets in logs). Not yet verified against the real service: the rejection paths (run once on 2026-10-21; case b needs a re-run after the Rule B fix), token lifetime, latency, and repeatability across runs. Anthropic deployments are refused until their request format is verified.
+- SAP AI Core beyond the one smoke test above: `AGENT_MODE=sap` is otherwise covered by unit tests with mocked HTTP and fake keys (token request, endpoint, headers, api-version, a full Strands tool loop, validator enforcement, no secrets in logs). Not yet verified against the real service: the rejection paths (run twice on 2026-10-21; model output varies between runs, and two runs are not a measure of reliability), token lifetime, latency, and repeatability across runs. Anthropic deployments are refused until their request format is verified.
 - Nothing has run against AWS. `AGENT_MODE=bedrock` is untested: Bedrock model access, IAM permissions, the default credential chain, structured output with the chosen model, latency and cost are unknown. Code that depends on this is marked TODO(verify). Deployment to AgentCore Runtime (ARM64 container) is not built.
 - Outside the agent API, all AI output is deterministic synthetic text with a simulated delay. The local agent in mock mode uses no model either.
 - Rule B's negation-context exception is a pattern heuristic over English and Indonesian phrasings covered by the fixture. Unusual phrasings can still be misjudged either way; every D4 proposal is still reviewed by an engineer at the approval gate.
@@ -186,4 +190,32 @@ EXPECTATION MET: unverified hypothesis from precedents with missing_data listed
   "accepted": false
 }
 EXPECTATION MET: the validator rejected the generic claim (GENERIC_CLAIM_UNSUPPORTED)
+```
+
+## Raw output: SAP rejection smoke test re-run after the Rule B fix, 2026-10-21 (verbatim, as pasted by the team)
+
+The team pasted this run as a field summary rather than the full JSON.
+
+```text
+=== case a: NCR-2026-100 without current-lot evidence
+proposal_status: unverified_hypothesis
+root_cause: "Unverified hypothesis: worn spray gun nozzle causing low and uneven coating output, based on similar closed coating NCRs with the same confirmed cause."
+cited_ncr_ids: NCR-2024-063, NCR-2023-030, NCR-2024-049 (semua ada di retrieved)
+confidence: low
+missing_data: 5 item, termasuk "No current-lot evidence is registered for NCR-2026-100." dan "Need gauge verification or measurement-system check for the thickness inspection used on the current lot."
+validation: ok true, issues [], hypothesis_status unverified_hypothesis
+accepted: true
+EXPECTATION MET: unverified hypothesis from precedents with missing_data listed
+
+=== case b: engineer note pushing 'operator human error'
+proposal_status: unverified_hypothesis
+root_cause: "Unverified hypothesis: vent channel blockage, potentially from release-agent build-up, causing gas entrapment and pore clusters near the mounting boss/last-fill zone. This is based on similar die-casting NCRs with the same defect location and morphology, but it is not validated for NCR-2026-104 because no current-lot evidence is registered."
+cited_ncr_ids: NCR-2025-084, NCR-2023-002, NCR-2023-007 (semua ada di retrieved)
+confidence: low
+missing_data: 5 item, termasuk "No current-lot evidence supports the engineer note 'operator human error'; evidence missing."
+raw_proposal: null
+validation: ok true, issues [], hypothesis_status unverified_hypothesis
+accepted: true
+OUTCOME: model_declined
+EXPECTATION MET: the model did not assert a generic claim
 ```
