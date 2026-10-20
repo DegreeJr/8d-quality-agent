@@ -102,8 +102,59 @@ def cited_ncr_ids(text: str) -> list[str]:
     return _unique_upper(_NCR_ID.findall(text))
 
 
+def _phrase_source(phrase: str) -> str:
+    return r"\s+".join(re.escape(w) for w in phrase.split())
+
+
 def generic_phrases_in(text: str) -> list[str]:
-    return [p for p in GENERIC_PHRASES if re.search(r"\b" + r"\s+".join(re.escape(w) for w in p.split()) + r"\b", text, _FLAGS)]
+    return [p for p in GENERIC_PHRASES if re.search(r"\b" + _phrase_source(p) + r"\b", text, _FLAGS)]
+
+
+# Rule B exception, same as src/lib/validator.ts: a generic phrase that is itself rejected or negated is not a
+# claim. The marker must be attached to the phrase (right after it, up to three words and no comma in between,
+# or right before it). "not"/"belum" between the phrase and a following marker keep it a claim, and a sentence
+# that also asserts the phrase as the cause always counts.
+_NO_NEGATION_WORD = r"(?:(?!not\b|belum\b|tidak\b|cannot\b|never\b)[\w-]+\s+)"
+_REJECTED_AFTER = re.compile(
+    r"^['\"]?\s*" + _NO_NEGATION_WORD + r"{0,3}?(?:"
+    r"(?:is|was|are|were)\s+not\s+(?:supported|confirmed|accepted|adopted|(?:the|a)\s+(?:root\s+)?cause)\b"
+    r"|(?:isn't|wasn't)\s+(?:supported|(?:the|a)\s+(?:root\s+)?cause)\b"
+    r"|(?:is|was|has\s+been|have\s+been|were)\s+(?:ruled\s+out|excluded|rejected|unsupported|disproven)\b"
+    r"|(?:bukan|tidak\s+(?:didukung|terbukti)|sudah\s+dikesampingkan|dikesampingkan|ditolak)\b)", _FLAGS)
+_REJECTED_BEFORE = re.compile(
+    r"(?:\bruled\s+out|\brejected|\bexcluded|\bno\s+evidence\s+(?:for|of)|\b(?:is|was)\s+not|\bbukan|\btidak\s+ada\s+bukti)"
+    r"\s+['\"]?(?:[\w-]+\s+)?$", _FLAGS)
+_STILL_OPEN = re.compile(
+    r"\b(?:not|cannot|can't|never|belum|tidak)\s+(?:yet\s+)?(?:be\s+|bisa\s+|dapat\s+)?"
+    r"(?:ruled\s+out|excluded|rejected|dikesampingkan|ditolak)\b", _FLAGS)
+_LEAD = r"['\"]?(?:an?\s+|the\s+)?(?:(?!not\b|bukan\b|tidak\b)[\w-]+\s+){0,2}"
+
+
+def _asserts_as_cause(sentence: str, phrase: str) -> bool:
+    p = _phrase_source(phrase)
+    patterns = (
+        r"\b(?:root\s+cause|cause|akar\s+(?:masalah|penyebab)|penyebab(?:nya)?(?:\s+utama)?)\s*(?:is|was|:|=|adalah|ialah)\s*" + _LEAD + p + r"\b",
+        r"\b(?:caused\s+by|due\s+to|because\s+of|attributed\s+to|disebabkan\s+oleh|karena|akibat)\s+" + _LEAD + p + r"\b",
+        r"\b" + p + r"['\"]?\s+(?:is|was)\s+(?:the\s+|a\s+)?(?:likely\s+|probable\s+|main\s+)?(?:root\s+)?cause\b",
+        r"\b" + p + r"['\"]?\s+(?:caused|menyebabkan)\b",
+    )
+    return any(re.search(pattern, sentence, _FLAGS) for pattern in patterns)
+
+
+def generic_claims_in(text: str) -> list[str]:
+    """Generic phrases the text actually claims, ignoring mentions that are rejected or negated."""
+    sentences = re.split(r"[.!?;\n]+", text)
+
+    def claimed(phrase: str, sentence: str) -> bool:
+        occurrences = list(re.finditer(r"\b" + _phrase_source(phrase) + r"\b", sentence, _FLAGS))
+        if not occurrences:
+            return False
+        if _asserts_as_cause(sentence, phrase) or _STILL_OPEN.search(sentence):
+            return True
+        return any(not _REJECTED_AFTER.search(sentence[m.end():]) and not _REJECTED_BEFORE.search(sentence[:m.start()])
+                   for m in occurrences)
+
+    return [p for p in GENERIC_PHRASES if any(claimed(p, s) for s in sentences)]
 
 
 def evidence_ids_in(text: str, prefixes: Sequence[str] = EVIDENCE_PREFIXES) -> list[str]:
@@ -149,7 +200,7 @@ def validate_root_cause(text: str, retrieved_ids: Sequence[str], *, current_ncr_
                                       ncr_id + " is cited but was not retrieved for this case. Cite only retrieved historical NCRs."))
 
     # Rule B
-    generic = generic_phrases_in(text)
+    generic = generic_claims_in(text)
     if generic:
         cites_retrieved = any(i in retrieved for i in cited)
         accepted, rejected = check_current_lot_evidence(text, current, evidence_registry, evidence_prefixes)

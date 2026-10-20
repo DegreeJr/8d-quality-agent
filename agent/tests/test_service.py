@@ -128,3 +128,19 @@ def test_rule_d_confirmed_claim_without_current_lot_evidence_is_rejected(corpus)
 def test_rule_d_status_with_registered_current_lot_evidence(corpus):
     response = run(MockEngine(), corpus)
     assert response["proposal_status"] == "hypothesis_with_current_evidence"
+
+
+# raw_proposal.root_cause from the 2026-10-21 SAP AI Core smoke run, case b (gpt-5.4), copied exactly.
+SAP_CASE_B = ("Unverified hypothesis: vent channel blockage or vent restriction near the mounting-boss last-fill area, "
+              "potentially from release-agent build-up, based on similar die-casting porosity cases NCR-2025-084, NCR-2023-002, "
+              "and NCR-2023-007. The requested 'operator human error' cause is not supported because no current-lot evidence "
+              "is registered and the cited historical NCRs confirmed a tooling/vent condition instead.")
+
+
+def test_model_rejecting_a_generic_claim_is_not_a_false_positive(corpus):
+    engine = ScriptedEngine(lambda ids: Proposal(root_cause=SAP_CASE_B, cited_ncr_ids=["NCR-2025-084", "NCR-2023-002", "NCR-2023-007"],
+                                                 confidence="low", missing_data=["Current-lot tooling inspection of die vent channels."]))
+    response = run(engine, corpus, request(evidence=[]))
+    assert response["accepted"] is True, response["validation"]
+    assert response["proposal_status"] == "unverified_hypothesis"
+    assert response["proposal"]["root_cause"] == SAP_CASE_B

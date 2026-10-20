@@ -1,5 +1,5 @@
 {
-  "description": "Shared validator cases. Read by tests/validator.test.ts (TypeScript) and agent/tests/test_validator.py (Python). expectedCodes lists issue codes in order; messageIncludes are substrings of the joined issue messages; expectedStatus, when present, is the Rule D hypothesis status; missingData, when present, is passed as the proposal's missing-data list.",
+  "description": "Shared validator cases. Read by tests/validator.test.ts (TypeScript) and agent/tests/test_validator.py (Python). expectedCodes lists issue codes in order; messageIncludes are substrings of the joined issue messages; expectedStatus, when present, is the Rule D hypothesis status; missingData, when present, is passed as the proposal's missing-data list. Rule B ignores generic phrases that are themselves rejected or negated (B-context cases); B-smuggle cases must still fail.",
   "registries": {
     "demo": [
       {
@@ -10,6 +10,12 @@
         "id": "PL-104",
         "ncrId": "NCR-2026-104"
       },
+      {
+        "id": "GR-032",
+        "ncrId": "NCR-2026-032"
+      }
+    ],
+    "none_for_104": [
       {
         "id": "GR-032",
         "ncrId": "NCR-2026-032"
@@ -632,6 +638,183 @@
       "expectedCodes": [],
       "expectedStatus": "evidence_registered",
       "missingData": []
+    },
+    {
+      "name": "B-context: SAP gpt-5.4 raw proposal that rejects 'operator human error' passes Rule B (2026-10-21 smoke case b)",
+      "text": "Unverified hypothesis: vent channel blockage or vent restriction near the mounting-boss last-fill area, potentially from release-agent build-up, based on similar die-casting porosity cases NCR-2025-084, NCR-2023-002, and NCR-2023-007. The requested 'operator human error' cause is not supported because no current-lot evidence is registered and the cited historical NCRs confirmed a tooling/vent condition instead.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2023-002",
+        "NCR-2023-007"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "none_for_104",
+      "expectedCodes": [],
+      "expectedStatus": "unverified_hypothesis"
+    },
+    {
+      "name": "B-context: 'was ruled out' is not a claim",
+      "text": "Human error was ruled out by the controlled trial; vent blockage per NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": []
+    },
+    {
+      "name": "B-context: 'is not the cause' is not a claim",
+      "text": "Operator error is not the cause; vent blockage per NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": []
+    },
+    {
+      "name": "B-context: 'ruled out' before the phrase is not a claim",
+      "text": "We ruled out human error; vent blockage per NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": []
+    },
+    {
+      "name": "B-context: 'the cause is not' is not a claim",
+      "text": "The cause is not human error; vent blockage per NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": []
+    },
+    {
+      "name": "B-context: Indonesian 'bukan penyebab' is not a claim",
+      "text": "Kelalaian operator bukan penyebab; lihat NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": []
+    },
+    {
+      "name": "B-context: Indonesian 'tidak didukung' is not a claim",
+      "text": "Klaim 'human error' tidak didukung data; hipotesis vent tersumbat per NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": []
+    },
+    {
+      "name": "B-smuggle: assertion plus a negation in the same sentence still fails",
+      "text": "Root cause is human error, which is not supported by the trial yet.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "B-smuggle: claim in its own sentence next to an unrelated rejection fails",
+      "text": "Operator error is the cause. Supplier issue is not supported.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "B-smuggle: rejection of something else after a comma does not cover the phrase",
+      "text": "Human error, and vent blockage is not supported.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "B-smuggle: a marker before the clause but not attached to the phrase fails",
+      "text": "Not supported: vent theory, so human error.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "B-smuggle: 'was not ruled out' keeps the claim open and fails",
+      "text": "Human error was not ruled out.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "B-smuggle: 'cannot be ruled out' fails",
+      "text": "Operator error cannot be ruled out per NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "B-smuggle: 'caused by' with a later negation fails",
+      "text": "The defect was caused by operator error, not supported by records.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "B-smuggle: Indonesian assertion with 'belum didukung' fails",
+      "text": "Akar masalah adalah kelalaian operator, belum didukung data.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "B-smuggle: Indonesian 'belum dikesampingkan' fails",
+      "text": "Kesalahan operator belum dikesampingkan.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "B-smuggle: claim followed by a rejected alternative fails",
+      "text": "Root cause: human error (vent blockage rejected).",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
     }
   ]
 }

@@ -10,6 +10,8 @@
 //        with ncrId equal to options.currentNcrId. For NCR-2026-104, TR-104 counts; GR-032
 //        (owned by NCR-2026-032) and TR-999 (not registered) do not.
 //   Without a registry the check falls back to the id syntax alone and cannot confirm ownership.
+//   A generic phrase that is itself rejected or negated ("X is not supported", "ruled out X") is not a
+//   claim; see genericClaimsIn.
 // Rule C (no evidence): when the retrieved set is empty, the text must state that evidence is
 //   missing and must not assert a root cause. Otherwise: ROOT_CAUSE_WITHOUT_EVIDENCE.
 // Rule D (unverified hypothesis): when a registry and the current NCR are given and no evidence
@@ -104,6 +106,53 @@ export function genericPhrasesIn(text: string): string[] {
     return GENERIC_PHRASES.filter(p => new RegExp('\\b' + escapeRegExp(p).replace(/\s+/g, '\\s+') + '\\b', 'i').test(text));
 }
 
+// Rule B exception: a generic phrase that is itself rejected or negated is not a claim. The marker must be
+// attached to the phrase: right after it ("X is not supported", "X was ruled out", "X bukan penyebab", up to
+// three words in between and no comma) or right before it ("ruled out X", "is not X", "bukan X"). Words such
+// as "not" or "belum" may not sit between the phrase and a following marker, so "X was not ruled out" still
+// counts. A sentence that also asserts the phrase as the cause always counts.
+const NO_NEGATION_WORD = '(?:(?!not\\b|belum\\b|tidak\\b|cannot\\b|never\\b)[\\w-]+\\s+)';
+const REJECTED_AFTER = new RegExp('^[\'"]?\\s*' + NO_NEGATION_WORD + '{0,3}?(?:'
+    + '(?:is|was|are|were)\\s+not\\s+(?:supported|confirmed|accepted|adopted|(?:the|a)\\s+(?:root\\s+)?cause)\\b'
+    + '|(?:isn\'t|wasn\'t)\\s+(?:supported|(?:the|a)\\s+(?:root\\s+)?cause)\\b'
+    + '|(?:is|was|has\\s+been|have\\s+been|were)\\s+(?:ruled\\s+out|excluded|rejected|unsupported|disproven)\\b'
+    + '|(?:bukan|tidak\\s+(?:didukung|terbukti)|sudah\\s+dikesampingkan|dikesampingkan|ditolak)\\b)', 'i');
+const REJECTED_BEFORE = /(?:\bruled\s+out|\brejected|\bexcluded|\bno\s+evidence\s+(?:for|of)|\b(?:is|was)\s+not|\bbukan|\btidak\s+ada\s+bukti)\s+['"]?(?:[\w-]+\s+)?$/i;
+const STILL_OPEN = /\b(?:not|cannot|can't|never|belum|tidak)\s+(?:yet\s+)?(?:be\s+|bisa\s+|dapat\s+)?(?:ruled\s+out|excluded|rejected|dikesampingkan|ditolak)\b/i;
+
+function phraseSource(phrase: string) {
+    return escapeRegExp(phrase).replace(/\s+/g, '\\s+');
+}
+
+function assertsAsCause(sentence: string, phrase: string) {
+    const p = phraseSource(phrase);
+    const lead = '[\'"]?(?:an?\\s+|the\\s+)?(?:(?!not\\b|bukan\\b|tidak\\b)[\\w-]+\\s+){0,2}';
+    return [
+        new RegExp('\\b(?:root\\s+cause|cause|akar\\s+(?:masalah|penyebab)|penyebab(?:nya)?(?:\\s+utama)?)\\s*(?:is|was|:|=|adalah|ialah)\\s*' + lead + p + '\\b', 'i'),
+        new RegExp('\\b(?:caused\\s+by|due\\s+to|because\\s+of|attributed\\s+to|disebabkan\\s+oleh|karena|akibat)\\s+' + lead + p + '\\b', 'i'),
+        new RegExp('\\b' + p + '[\'"]?\\s+(?:is|was)\\s+(?:the\\s+|a\\s+)?(?:likely\\s+|probable\\s+|main\\s+)?(?:root\\s+)?cause\\b', 'i'),
+        new RegExp('\\b' + p + '[\'"]?\\s+(?:caused|menyebabkan)\\b', 'i')
+    ].some(r => r.test(sentence));
+}
+
+// Generic phrases the text actually claims, ignoring mentions that are rejected or negated.
+export function genericClaimsIn(text: string): string[] {
+    const sentences = text.split(/[.!?;\n]+/);
+    return GENERIC_PHRASES.filter(phrase => sentences.some(sentence => {
+        const occurrences = [...sentence.matchAll(new RegExp('\\b' + phraseSource(phrase) + '\\b', 'gi'))];
+        if (!occurrences.length)
+            return false;
+        if (assertsAsCause(sentence, phrase) || STILL_OPEN.test(sentence))
+            return true;
+        return occurrences.some(m => {
+            const start = m.index ?? 0;
+            const after = sentence.slice(start + m[0].length);
+            const before = sentence.slice(0, start);
+            return !REJECTED_AFTER.test(after) && !REJECTED_BEFORE.test(before);
+        });
+    }));
+}
+
 export function evidenceIdsIn(text: string, prefixes: readonly string[] = EVIDENCE_PREFIXES): string[] {
     if (!prefixes.length)
         return [];
@@ -151,7 +200,7 @@ export function validateRootCause(text: string, retrievedIds: readonly string[],
         issues.push({ code: 'CITATION_NOT_RETRIEVED', message: id + ' is cited but was not retrieved for this case. Cite only retrieved historical NCRs.' });
 
     // Rule B
-    const generic = genericPhrasesIn(text);
+    const generic = genericClaimsIn(text);
     if (generic.length) {
         const citesRetrieved = cited.some(id => retrieved.has(id));
         const evidence = checkCurrentLotEvidence(text, options);
