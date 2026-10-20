@@ -1,9 +1,12 @@
 r"""Manual smoke test of the rejection paths with AGENT_MODE=sap. Not part of pytest or npm test: it calls SAP AI Core for real.
 
-Case a: NCR-2026-100 (no registered current-lot evidence). Expected: root_cause null, or the proposal rejected
-        with "evidence missing".
+Case a: NCR-2026-100 (no registered current-lot evidence). Expected under Rule D: either an accepted proposal
+        with proposal_status "unverified_hypothesis" and non-empty missing_data (a hypothesis from precedents,
+        not stated as confirmed), or no hypothesis at all (root_cause null).
 Case b: an engineer note pushing a generic claim ("operator human error"), with no registered current-lot
-        evidence. Expected: rejected by the validator with GENERIC_CLAIM_UNSUPPORTED.
+        evidence. Expected: either the model declines to write the generic claim (correct agent behavior), or
+        the validator rejects it with GENERIC_CLAIM_UNSUPPORTED. The validator path for "human error" typed by
+        an engineer is tested in the D4 editor of the UI.
 
 For each case it prints the agent response JSON unchanged, then one EXPECTATION line. Exit code 0 only if both
 expectations are met. Run from agent/ with the same environment as scripts\smoke_sap.py:
@@ -24,6 +27,7 @@ from quality_agent.corpus import Corpus  # noqa: E402
 from quality_agent.engines import create_engine  # noqa: E402
 from quality_agent.sap import SapAuthError, SapConfigError  # noqa: E402
 from quality_agent.service import propose_root_cause  # noqa: E402
+from quality_agent.validator import generic_phrases_in  # noqa: E402
 
 NCR_100 = {
     "id": "NCR-2026-100",
@@ -46,18 +50,22 @@ NCR_104_GENERIC = {
 def check_a(r: dict) -> tuple[bool, str]:
     proposal = r["proposal"]
     if proposal["root_cause"] is None:
-        return True, "root_cause is null"
-    if not r["accepted"] and any("evidence missing" in m.lower() for m in proposal["missing_data"]):
-        return True, "proposal rejected with evidence missing"
-    return False, "accepted with a root cause hypothesis (retrieved: " + ", ".join(h["id"] for h in r["retrieved"]) + ")"
+        return True, "no hypothesis (root_cause null); proposal_status " + str(r.get("proposal_status"))
+    if r["accepted"] and r.get("proposal_status") == "unverified_hypothesis" and proposal["missing_data"]:
+        return True, "unverified hypothesis from precedents with missing_data listed"
+    return False, ("root cause returned with proposal_status " + str(r.get("proposal_status"))
+                   + " and " + str(len(proposal["missing_data"])) + " missing_data item(s)")
 
 
 def check_b(r: dict) -> tuple[bool, str]:
     codes = [i["code"] for i in r["validation"]["issues"]]
     if not r["accepted"] and "GENERIC_CLAIM_UNSUPPORTED" in codes:
-        return True, "rejected with GENERIC_CLAIM_UNSUPPORTED"
+        return True, "the validator rejected the generic claim (GENERIC_CLAIM_UNSUPPORTED)"
     if r["accepted"]:
-        return False, "accepted: the model did not make an unsupported generic claim, so the validator rule was not exercised"
+        generic = generic_phrases_in(r["proposal"]["root_cause"] or "")
+        if not generic:
+            return True, "the model declined to write the generic claim (correct agent behavior; validator path not exercised here)"
+        return False, "accepted although the root cause contains a generic phrase: " + ", ".join(generic)
     return False, "rejected, but with " + (", ".join(codes) or "no issue codes") + " instead of GENERIC_CLAIM_UNSUPPORTED"
 
 
