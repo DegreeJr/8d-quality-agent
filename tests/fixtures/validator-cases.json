@@ -1,0 +1,475 @@
+{
+  "description": "Shared validator cases. Read by tests/validator.test.ts (TypeScript) and agent/tests/test_validator.py (Python). expectedCodes lists issue codes in order; messageIncludes are substrings of the joined issue messages.",
+  "registries": {
+    "demo": [
+      {
+        "id": "TR-104",
+        "ncrId": "NCR-2026-104"
+      },
+      {
+        "id": "PL-104",
+        "ncrId": "NCR-2026-104"
+      },
+      {
+        "id": "GR-032",
+        "ncrId": "NCR-2026-032"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "A: citing retrieved ids passes",
+      "text": "Compare vent condition with NCR-2025-084 and NCR-2026-019.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": []
+    },
+    {
+      "name": "A: a non-retrieved id is rejected once",
+      "text": "Similar to NCR-2026-032, NCR-2026-032 and NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "CITATION_NOT_RETRIEVED"
+      ],
+      "messageIncludes": [
+        "NCR-2026-032"
+      ]
+    },
+    {
+      "name": "A: ids match case-insensitively",
+      "text": "see ncr-2025-084",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": []
+    },
+    {
+      "name": "A: lower-case non-retrieved id is rejected",
+      "text": "see ncr-2026-999",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "CITATION_NOT_RETRIEVED"
+      ]
+    },
+    {
+      "name": "A: a longer number is not an NCR id",
+      "text": "see NCR-2025-0840",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": []
+    },
+    {
+      "name": "A: the current case id is not a citation",
+      "text": "NCR-2026-104 resembles NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "expectedCodes": []
+    },
+    {
+      "name": "A: without a current id it is a citation",
+      "text": "NCR-2026-104 resembles NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "CITATION_NOT_RETRIEVED"
+      ]
+    },
+    {
+      "name": "B: English generic claim: root cause: human error",
+      "text": "root cause: human error",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "B: English generic claim: Root cause: HUMAN ERROR",
+      "text": "Root cause: HUMAN ERROR",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "B: English generic claim: Operator   error during setup",
+      "text": "Operator   error during setup",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "B: English generic claim: Operator needs training",
+      "text": "Operator needs training",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "B: English generic claim: lack of training",
+      "text": "lack of training",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "B: English generic claim: Carelessness at station 3",
+      "text": "Carelessness at station 3",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "B: Indonesian generic claim: Operator kurang teliti saat setup",
+      "text": "Operator kurang teliti saat setup",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "B: Indonesian generic claim: Kelalaian operator shift 2",
+      "text": "Kelalaian operator shift 2",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "B: Indonesian generic claim: perlu training ulang",
+      "text": "perlu training ulang",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "B: Indonesian generic claim: Kurang hati-hati",
+      "text": "Kurang hati-hati",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "B: Indonesian generic claim: Penyebab: kesalahan manusia",
+      "text": "Penyebab: kesalahan manusia",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "B: phrases inside other words do not match",
+      "text": "Inhuman errors are not a phrase here: humanerror",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": []
+    },
+    {
+      "name": "B: citation and evidence id together pass",
+      "text": "Human error per NCR-2025-084, confirmed by trial TR-104.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": []
+    },
+    {
+      "name": "B: Indonesian claim with citation and evidence passes",
+      "text": "Operator kurang teliti, lihat NCR-2026-019 dan gauge study GR-032.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": []
+    },
+    {
+      "name": "B: citation without evidence fails",
+      "text": "Human error per NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "B: evidence without citation fails",
+      "text": "Human error confirmed by trial TR-104.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "B: a non-retrieved citation does not count",
+      "text": "Human error per NCR-2026-032 and TR-104.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "CITATION_NOT_RETRIEVED",
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "B: evidence ids are case-insensitive",
+      "text": "Human error per NCR-2025-084 and tr-104.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": []
+    },
+    {
+      "name": "B: message names what is missing",
+      "text": "root cause: human error",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ],
+      "messageIncludes": [
+        "human error",
+        "cited retrieved NCR",
+        "current-lot evidence"
+      ]
+    },
+    {
+      "name": "C: evidence missing statement passes",
+      "text": "Evidence missing. Collect process logs before selecting a root cause.",
+      "retrieved": [],
+      "expectedCodes": []
+    },
+    {
+      "name": "C: Indonesian evidence missing statement passes",
+      "text": "Bukti belum ada. Kumpulkan log proses dulu.",
+      "retrieved": [],
+      "expectedCodes": []
+    },
+    {
+      "name": "C: undecided root cause with no evidence passes",
+      "text": "Root cause: unknown. No evidence retrieved yet.",
+      "retrieved": [],
+      "expectedCodes": []
+    },
+    {
+      "name": "C: no missing-evidence statement fails",
+      "text": "Check coating line parameters.",
+      "retrieved": [],
+      "expectedCodes": [
+        "ROOT_CAUSE_WITHOUT_EVIDENCE"
+      ]
+    },
+    {
+      "name": "C: empty text fails",
+      "text": "",
+      "retrieved": [],
+      "expectedCodes": [
+        "ROOT_CAUSE_WITHOUT_EVIDENCE"
+      ]
+    },
+    {
+      "name": "C: asserting a root cause fails: Evidence missing. Root cause is spray gun clogging.",
+      "text": "Evidence missing. Root cause is spray gun clogging.",
+      "retrieved": [],
+      "expectedCodes": [
+        "ROOT_CAUSE_WITHOUT_EVIDENCE"
+      ]
+    },
+    {
+      "name": "C: asserting a root cause fails: Evidence missing, but the defect was caused by low cure temperature.",
+      "text": "Evidence missing, but the defect was caused by low cure temperature.",
+      "retrieved": [],
+      "expectedCodes": [
+        "ROOT_CAUSE_WITHOUT_EVIDENCE"
+      ]
+    },
+    {
+      "name": "C: asserting a root cause fails: Tidak ada bukti. Akar masalah adalah nozzle tersumbat.",
+      "text": "Tidak ada bukti. Akar masalah adalah nozzle tersumbat.",
+      "retrieved": [],
+      "expectedCodes": [
+        "ROOT_CAUSE_WITHOUT_EVIDENCE"
+      ]
+    },
+    {
+      "name": "C: asserting a root cause fails: Bukti belum ada, cacat disebabkan oleh suhu oven.",
+      "text": "Bukti belum ada, cacat disebabkan oleh suhu oven.",
+      "retrieved": [],
+      "expectedCodes": [
+        "ROOT_CAUSE_WITHOUT_EVIDENCE"
+      ]
+    },
+    {
+      "name": "B+C: generic claim with nothing retrieved",
+      "text": "root cause: human error",
+      "retrieved": [],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED",
+        "ROOT_CAUSE_WITHOUT_EVIDENCE"
+      ]
+    },
+    {
+      "name": "A with nothing retrieved",
+      "text": "Evidence missing. NCR-2025-084 looks similar.",
+      "retrieved": [],
+      "expectedCodes": [
+        "CITATION_NOT_RETRIEVED"
+      ]
+    },
+    {
+      "name": "valid evidence-backed text passes",
+      "text": "Candidate precedents (historical, not validated): NCR-2025-084, NCR-2026-019. Vent channel blockage reproduced in controlled trial TR-104; parameter log PL-104 matches.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": []
+    },
+    {
+      "name": "registry: evidence owned by another NCR is rejected",
+      "text": "Human error per NCR-2025-084, see gauge study GR-032.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "demo",
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ],
+      "messageIncludes": [
+        "GR-032 belongs to NCR-2026-032, not NCR-2026-104"
+      ]
+    },
+    {
+      "name": "registry: unregistered evidence is rejected",
+      "text": "Human error per NCR-2025-084, see trial TR-999.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "demo",
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ],
+      "messageIncludes": [
+        "TR-999 is not in the evidence registry"
+      ]
+    },
+    {
+      "name": "registry: evidence owned by the open NCR passes",
+      "text": "Human error per NCR-2025-084, confirmed by trial TR-104.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "demo",
+      "expectedCodes": []
+    },
+    {
+      "name": "registry: one registered id is enough",
+      "text": "Human error per NCR-2025-084: GR-032 and tr-104.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "demo",
+      "expectedCodes": []
+    },
+    {
+      "name": "registry: without a current NCR nothing counts",
+      "text": "Human error per NCR-2025-084, TR-104.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "registry": "demo",
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "registry: message suggests registered evidence",
+      "text": "root cause: human error",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "demo",
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ],
+      "messageIncludes": [
+        "registered to this NCR such as TR-104"
+      ]
+    }
+  ]
+}
