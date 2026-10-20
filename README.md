@@ -35,6 +35,18 @@ npm start
 
 Use the profile menu to reset the browser-local demo data. State persists in localStorage under `8d-quality-agent-v1`. All AI generation and assistant replies use deterministic synthetic suggestions with short simulated processing delays. No model, AWS service, authentication, or production backend is connected.
 
+## Root cause check
+
+`src/lib/validator.ts` enforces the agent's signature rule with pure functions. `validateRootCause(text, retrievedIds, options?)` returns `{ ok, issues: { code, message }[] }`:
+
+- **Rule A, citation integrity** (`CITATION_NOT_RETRIEVED`): every NCR id in the text (`/NCR-d{4}-d{3}/`, case-insensitive) must be one of the retrieved historical NCRs. The id of the case under investigation is not counted as a citation.
+- **Rule B, generic claims** (`GENERIC_CLAIM_UNSUPPORTED`): generic root-cause phrases in English or Indonesian (for example "human error", "operator error", "needs training", "lack of training", "carelessness", "kurang teliti", "kelalaian operator", "perlu training"; full list in `GENERIC_PHRASES`) are rejected unless BOTH hold: at least one retrieved NCR is cited, AND the text references objective current-lot evidence, defined as an evidence record id `PREFIX-NNN` with a prefix from `EVIDENCE_PREFIXES` (TR, GR, TI, TD, VT, PL, FV, FP, LAB; for example TR-104 or GR-032).
+- **Rule C, no evidence** (`ROOT_CAUSE_WITHOUT_EVIDENCE`): when nothing was retrieved, the text must state that evidence is missing and must not assert a root cause.
+
+The check is syntactic. It cannot confirm that an evidence id really belongs to the current lot; that needs an evidence registry on the backend.
+
+In the app, D4 approval is refused while the check fails (`reviewSection` throws `RootCauseRejectedError`). Generated or saved D4 drafts that fail, and blocked approvals, are logged as System audit events. The D4 editor shows a live Root cause check panel.
+
 ## Structure
 
 - `src/app`: six Next.js App Router pages and shared styling.
@@ -42,7 +54,9 @@ Use the profile menu to reset the browser-local demo data. State persists in loc
 - `src/lib/types.ts`: domain contracts.
 - `src/lib/data.ts`: connected synthetic cases and draft generation.
 - `src/lib/workflow.ts`: approval gates and business validation.
+- `src/lib/validator.ts`: root cause check (rules A, B, C).
 - `tests/workflow.test.ts`: approval and entity-integrity checks.
+- `tests/validator.test.ts`: validator rules and D4 approval integration.
 
 For API integration, replace provider mutations with an API-backed repository while retaining domain types and workflow validation. Human approvals must eventually be enforced by a backend with authenticated identities, immutable audit storage, and objective evidence records.
 
