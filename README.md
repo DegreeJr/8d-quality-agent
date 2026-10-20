@@ -33,7 +33,11 @@ npm start
 5. Knowledge Base: inspect synthetic historical causes, corrective actions, and evidence references. References are metadata, not attached files.
 6. Audit Trail: review AI, human, and system events. Export filtered events as JSON.
 
-Use the profile menu to reset the browser-local demo data. State persists in localStorage under `8d-quality-agent-v1`. All AI generation and assistant replies use deterministic synthetic suggestions with short simulated processing delays. No model, AWS service, authentication, or production backend is connected.
+Use the profile menu to reset the browser-local demo data. State persists in localStorage under `8d-quality-agent-v1`. By default all AI generation and assistant replies use deterministic synthetic suggestions with short simulated processing delays. No model, AWS service, authentication, or production backend is connected.
+
+## Local agent (optional)
+
+With `NEXT_PUBLIC_AGENT_BACKEND=local`, "Generate AI suggestion" on D4 calls `POST /api/agent/root-cause`, which forwards to the Python agent at `AGENT_URL` (default `http://127.0.0.1:8080`). See `agent/README.md` to run it. The agent defaults to mock mode (no model, no AWS); the draft and audit trail name the mode. Other disciplines stay simulated. After an agent proposal, the Root cause check uses the historical NCRs the agent's tools returned. The corpus is `data/synthetic-ncrs.json`; its five anchors (`data/anchor-history.json`) are the historical cases shown in the UI.
 
 ## Root cause check
 
@@ -71,6 +75,9 @@ Current result and its limit are recorded in VERIFICATION.md.
 - `src/lib/validator.ts`: root cause check (rules A, B, C).
 - `tests/workflow.test.ts`: approval and entity-integrity checks.
 - `src/lib/retrieval.ts`: retriever interface, keyword baseline, hit@k.
+- `src/lib/agent-client.ts`, `src/lib/agent-proxy.ts`, `src/app/api/agent/root-cause/route.ts`: typed agent client and server-side proxy.
+- `agent/`: Python Strands agent, tools, validator port, AgentCore HTTP entry point, pytest suite.
+- `tests/fixtures/`: validator cases and the agent response contract, shared by the TypeScript and Python suites.
 - `scripts/`, `data/`: synthetic data generator, generated data, retrieval eval.
 - `tests/validator.test.ts`: validator rules, evidence registry and D4 approval integration.
 - `tests/retrieval.test.ts`: retriever, metric and synthetic dataset consistency.
