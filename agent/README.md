@@ -52,6 +52,8 @@ $env:SAP_MODEL_NAME = 'gpt-5.4'
 .\.venv\Scripts\python scripts\smoke_sap.py
 ```
 
+Rejection paths, same environment: `.\.venv\Scripts\python scripts\smoke_sap_rejections.py`. It runs (a) NCR-2026-100 without current-lot evidence and (b) an engineer note pushing "operator human error", prints each agent response unchanged followed by an `EXPECTATION MET` / `NOT MET` line, and exits 0 only if both are met.
+
 ## Adding a provider
 
 `engines.py` defines an `Engine` protocol. Either add an entry to `MODEL_PROVIDERS` that returns a `ModelSpec` (model id, model name, factory for a Strands `Model`), or implement `Engine` directly. The service, tools and validator do not change.
