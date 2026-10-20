@@ -7,7 +7,7 @@ Enterprise manufacturing quality frontend for the AWS Agentic AI Hackathon / Int
 Requires Node.js 20.9 or newer and npm.
 
 ```powershell
-cd "C:\Kuliahhh\Project Lomba AWS"
+cd 8d-quality-agent
 npm install
 npm run dev
 ```
