@@ -39,13 +39,27 @@ Use the profile menu to reset the browser-local demo data. State persists in loc
 
 `src/lib/validator.ts` enforces the agent's signature rule with pure functions. `validateRootCause(text, retrievedIds, options?)` returns `{ ok, issues: { code, message }[] }`:
 
-- **Rule A, citation integrity** (`CITATION_NOT_RETRIEVED`): every NCR id in the text (`/NCR-d{4}-d{3}/`, case-insensitive) must be one of the retrieved historical NCRs. The id of the case under investigation is not counted as a citation.
+- **Rule A, citation integrity** (`CITATION_NOT_RETRIEVED`): every NCR id in the text (`/NCR-\d{4}-\d{3}/`, case-insensitive) must be one of the retrieved historical NCRs. The id of the case under investigation is not counted as a citation.
 - **Rule B, generic claims** (`GENERIC_CLAIM_UNSUPPORTED`): generic root-cause phrases in English or Indonesian (for example "human error", "operator error", "needs training", "lack of training", "carelessness", "kurang teliti", "kelalaian operator", "perlu training"; full list in `GENERIC_PHRASES`) are rejected unless BOTH hold: at least one retrieved NCR is cited, AND the text references objective current-lot evidence, defined as an evidence record id `PREFIX-NNN` with a prefix from `EVIDENCE_PREFIXES` (TR, GR, TI, TD, VT, PL, FV, FP, LAB) that is listed in the evidence registry (`evidenceRegistry` in `src/lib/data.ts`) as owned by the NCR being investigated. For NCR-2026-104, TR-104 counts; GR-032 (owned by NCR-2026-032) and TR-999 (not registered) do not.
 - **Rule C, no evidence** (`ROOT_CAUSE_WITHOUT_EVIDENCE`): when nothing was retrieved, the text must state that evidence is missing and must not assert a root cause.
 
 Evidence ownership is checked against a synthetic, in-code registry. In production the registry must come from the system of record, and the check only proves that a registered id is cited, not that the evidence supports the claim; the engineer still reviews it at the approval gate. Without a registry, `validateRootCause` falls back to the id syntax alone.
 
-In the app, D4 approval is refused while the check fails (`reviewSection` throws `RootCauseRejectedError`). Generated or saved D4 drafts that fail, and blocked approvals, are logged as System audit events. The D4 editor shows a live Root cause check panel.
+In the app, D4 approval is refused while the check fails (`reviewSection` throws `RootCauseRejectedError`). Generated or saved D4 drafts that fail, and blocked approvals, are logged as System audit events. The D4 editor shows a live Root cause check panel with the evidence registered to the open NCR. Approve is disabled while the editor has unsaved changes.
+
+## Synthetic data and retrieval eval
+
+```powershell
+npm run data:generate                 # writes data/synthetic-ncrs.json, data/evidence-registry.json, data/eval-set.json
+npm run eval:retrieval                # prints hit@1 and hit@3; add -- --verbose for per-case results
+```
+
+- `scripts/generate-synthetic-ncrs.ts` (seed 20261031, deterministic): 200 closed NCRs (NCR-2023-001 to NCR-2024-100) across die casting, CNC machining, assembly and coating, in 16 root cause families (`rootCauseCode`). Wording mixes English and Indonesian shop-floor abbreviations (NG, pcs, tdk, utk, dgn, mc). Some titles and symptoms are generic so only the cue sentence points to the cause; one family has a deliberate "new operator" red herring.
+- `data/evidence-registry.json`: two evidence records per NCR (id, owner ncrId, kind, summary, date), ids `PREFIX-YYNNN`.
+- `data/eval-set.json`: 30 held-out cases (one per family, the rest seeded random) with the D4 query text and the known root cause. `synthetic-ncrs.json` keeps all 200; the eval script removes held-out cases from the corpus.
+- `scripts/eval-retrieval.ts`: keyword baseline (`KeywordRetriever` in `src/lib/retrieval.ts`, IDF-weighted term overlap over title, description, confirmed cause and action). A hit means one of the top 3 results shares the held-out case's root cause family. The `Retriever` interface is where a Bedrock Knowledge Base retriever plugs in.
+
+Current result and its limit are recorded in VERIFICATION.md.
 
 ## Structure
 
@@ -56,7 +70,10 @@ In the app, D4 approval is refused while the check fails (`reviewSection` throws
 - `src/lib/workflow.ts`: approval gates and business validation.
 - `src/lib/validator.ts`: root cause check (rules A, B, C).
 - `tests/workflow.test.ts`: approval and entity-integrity checks.
-- `tests/validator.test.ts`: validator rules and D4 approval integration.
+- `src/lib/retrieval.ts`: retriever interface, keyword baseline, hit@k.
+- `scripts/`, `data/`: synthetic data generator, generated data, retrieval eval.
+- `tests/validator.test.ts`: validator rules, evidence registry and D4 approval integration.
+- `tests/retrieval.test.ts`: retriever, metric and synthetic dataset consistency.
 
 For API integration, replace provider mutations with an API-backed repository while retaining domain types and workflow validation. Human approvals must eventually be enforced by a backend with authenticated identities, immutable audit storage, and objective evidence records.
 
