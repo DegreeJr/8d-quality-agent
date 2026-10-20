@@ -6,6 +6,9 @@ Rule B (generic claims): a generic root-cause phrase is rejected unless the text
   registered to the NCR under investigation. Without a registry the id syntax alone counts.
 Rule C (no evidence): with nothing retrieved, the text must state that evidence is missing and must
   not assert a root cause.
+Rule D (unverified hypothesis): with a registry and a current NCR that owns no registered evidence, the
+  status is "unverified_hypothesis": a hypothesis from precedents is allowed, but it must not be stated as
+  confirmed, and a given missing-data list must not be empty. Otherwise the status is "evidence_registered".
 Both suites run the cases in tests/fixtures/validator-cases.json.
 """
 
@@ -53,6 +56,20 @@ _ROOT_CAUSE_ASSERTIONS = [re.compile(p, _FLAGS) for p in (
 )]
 
 
+# The current root cause stated as confirmed, verified or validated. Negations ("not yet confirmed",
+# "belum terkonfirmasi") and words such as "unverified" do not match, nor does a historical cause
+# "confirmed by tooling inspection", because it does not say "root cause".
+_CLAIMED_CONFIRMED = [re.compile(p, _FLAGS) for p in (
+    r"\b(?:root\s+cause|akar\s+(?:masalah|penyebab)|penyebab\s+utama)\b(?:(?!\bnot\b|\bbelum\b|\btidak\b)[^.;:]){0,40}?"
+    r"\b(?:confirmed|verified|validated|terkonfirmasi|dikonfirmasi|terverifikasi|tervalidasi)\b",
+    r"\b(?:confirmed|verified|validated)\s+root\s+cause\b",
+    r"\b(?:terkonfirmasi|dikonfirmasi|terverifikasi)\s+sebagai\s+(?:akar|penyebab)\b",
+)]
+
+UNVERIFIED = "unverified_hypothesis"
+EVIDENCE_REGISTERED = "evidence_registered"
+
+
 @dataclass(frozen=True)
 class ValidationIssue:
     code: str
@@ -63,9 +80,12 @@ class ValidationIssue:
 class ValidationResult:
     ok: bool
     issues: list[ValidationIssue] = field(default_factory=list)
+    # Set only when both a registry and the current NCR are known (Rule D).
+    hypothesis_status: str | None = None
 
     def to_dict(self) -> dict:
-        return {"ok": self.ok, "issues": [{"code": i.code, "message": i.message} for i in self.issues]}
+        return {"ok": self.ok, "issues": [{"code": i.code, "message": i.message} for i in self.issues],
+                "hypothesis_status": self.hypothesis_status}
 
 
 @dataclass(frozen=True)
@@ -116,7 +136,8 @@ def check_current_lot_evidence(text: str, current_ncr_id: str | None, registry: 
 
 def validate_root_cause(text: str, retrieved_ids: Sequence[str], *, current_ncr_id: str | None = None,
                         evidence_registry: Sequence[EvidenceRef] | None = None,
-                        evidence_prefixes: Sequence[str] = EVIDENCE_PREFIXES) -> ValidationResult:
+                        evidence_prefixes: Sequence[str] = EVIDENCE_PREFIXES,
+                        missing_data: Sequence[str] | None = None) -> ValidationResult:
     issues: list[ValidationIssue] = []
     retrieved = {i.upper() for i in retrieved_ids}
     current = current_ncr_id.upper() if current_ncr_id else None
@@ -162,4 +183,19 @@ def validate_root_cause(text: str, retrieved_ids: Sequence[str], *, current_ncr_
                 parts.append("State that evidence is missing.")
             issues.append(ValidationIssue("ROOT_CAUSE_WITHOUT_EVIDENCE", " ".join(parts)))
 
-    return ValidationResult(ok=not issues, issues=issues)
+    # Rule D
+    status = None
+    if evidence_registry is not None and current:
+        has_current_lot = any(r.ncr_id.upper() == current for r in evidence_registry)
+        status = EVIDENCE_REGISTERED if has_current_lot else UNVERIFIED
+        if not has_current_lot:
+            if any(r.search(text) for r in _CLAIMED_CONFIRMED):
+                issues.append(ValidationIssue("ROOT_CAUSE_CLAIMED_CONFIRMED",
+                                              "No current-lot evidence is registered for " + current + ", so the root cause is an "
+                                              "unverified hypothesis and must not be stated as confirmed."))
+            if missing_data is not None and len(missing_data) == 0:
+                issues.append(ValidationIssue("MISSING_DATA_REQUIRED",
+                                              "No current-lot evidence is registered for " + current
+                                              + ". List the missing data needed to verify the hypothesis."))
+
+    return ValidationResult(ok=not issues, issues=issues, hypothesis_status=status)

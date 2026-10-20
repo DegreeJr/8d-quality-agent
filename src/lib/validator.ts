@@ -12,10 +12,16 @@
 //   Without a registry the check falls back to the id syntax alone and cannot confirm ownership.
 // Rule C (no evidence): when the retrieved set is empty, the text must state that evidence is
 //   missing and must not assert a root cause. Otherwise: ROOT_CAUSE_WITHOUT_EVIDENCE.
+// Rule D (unverified hypothesis): when a registry and the current NCR are given and no evidence
+//   record is registered to that NCR, the result is hypothesisStatus "unverified_hypothesis".
+//   A hypothesis from precedents is still allowed, but the text must not state the root cause as
+//   confirmed (ROOT_CAUSE_CLAIMED_CONFIRMED), and when options.missingData is given it must not be
+//   empty (MISSING_DATA_REQUIRED). With registered evidence the status is "evidence_registered".
 
 import type { EvidenceRecord } from './types';
 
-export type ValidationIssueCode = 'CITATION_NOT_RETRIEVED' | 'GENERIC_CLAIM_UNSUPPORTED' | 'ROOT_CAUSE_WITHOUT_EVIDENCE';
+export type ValidationIssueCode = 'CITATION_NOT_RETRIEVED' | 'GENERIC_CLAIM_UNSUPPORTED' | 'ROOT_CAUSE_WITHOUT_EVIDENCE' | 'ROOT_CAUSE_CLAIMED_CONFIRMED' | 'MISSING_DATA_REQUIRED';
+export type HypothesisStatus = 'unverified_hypothesis' | 'evidence_registered';
 
 export interface ValidationIssue {
     code: ValidationIssueCode;
@@ -25,6 +31,8 @@ export interface ValidationIssue {
 export interface ValidationResult {
     ok: boolean;
     issues: ValidationIssue[];
+    // Set only when both a registry and the current NCR are known (Rule D).
+    hypothesisStatus?: HypothesisStatus;
 }
 
 export interface ValidateOptions {
@@ -34,6 +42,8 @@ export interface ValidateOptions {
     evidencePrefixes?: readonly string[];
     // When given, only evidence ids registered to currentNcrId count as current-lot evidence.
     evidenceRegistry?: readonly Pick<EvidenceRecord, 'id' | 'ncrId'>[];
+    // Missing-data list of a structured proposal. Rule D requires it to be non-empty when given.
+    missingData?: readonly string[];
 }
 
 export const GENERIC_PHRASES: readonly string[] = [
@@ -71,6 +81,15 @@ const ROOT_CAUSE_ASSERTIONS: readonly RegExp[] = [
     new RegExp('\\bakar\\s+(?:masalah|penyebab)(?:nya)?\\s*(?::|=|\\badalah\\b|\\bialah\\b)' + UNDECIDED, 'i'),
     new RegExp('\\bpenyebab(?:nya)?(?:\\s+utama)?\\s*(?::|=|\\badalah\\b|\\bialah\\b)' + UNDECIDED, 'i'),
     /\bdisebabkan\s+oleh\b/i
+];
+
+// The current root cause stated as confirmed, verified or validated. Negations ("not yet confirmed",
+// "belum terkonfirmasi") and words such as "unverified" do not match. A historical cause described as
+// "confirmed by tooling inspection" does not match either, because it does not say "root cause".
+const CLAIMED_CONFIRMED: readonly RegExp[] = [
+    /\b(?:root\s+cause|akar\s+(?:masalah|penyebab)|penyebab\s+utama)\b(?:(?!\bnot\b|\bbelum\b|\btidak\b)[^.;:]){0,40}?\b(?:confirmed|verified|validated|terkonfirmasi|dikonfirmasi|terverifikasi|tervalidasi)\b/i,
+    /\b(?:confirmed|verified|validated)\s+root\s+cause\b/i,
+    /\b(?:terkonfirmasi|dikonfirmasi|terverifikasi)\s+sebagai\s+(?:akar|penyebab)\b/i
 ];
 
 function escapeRegExp(s: string) {
@@ -153,5 +172,18 @@ export function validateRootCause(text: string, retrievedIds: readonly string[],
             issues.push({ code: 'ROOT_CAUSE_WITHOUT_EVIDENCE', message: ['No historical evidence was retrieved.', asserts && 'Do not assert a root cause.', !statesMissing && 'State that evidence is missing.'].filter(Boolean).join(' ') });
     }
 
-    return { ok: issues.length === 0, issues };
+    // Rule D
+    let hypothesisStatus: HypothesisStatus | undefined;
+    if (options.evidenceRegistry && current) {
+        const hasCurrentLot = options.evidenceRegistry.some(r => r.ncrId.toUpperCase() === current);
+        hypothesisStatus = hasCurrentLot ? 'evidence_registered' : 'unverified_hypothesis';
+        if (!hasCurrentLot) {
+            if (CLAIMED_CONFIRMED.some(r => r.test(text)))
+                issues.push({ code: 'ROOT_CAUSE_CLAIMED_CONFIRMED', message: 'No current-lot evidence is registered for ' + current + ', so the root cause is an unverified hypothesis and must not be stated as confirmed.' });
+            if (options.missingData && options.missingData.length === 0)
+                issues.push({ code: 'MISSING_DATA_REQUIRED', message: 'No current-lot evidence is registered for ' + current + '. List the missing data needed to verify the hypothesis.' });
+        }
+    }
+
+    return hypothesisStatus ? { ok: issues.length === 0, issues, hypothesisStatus } : { ok: issues.length === 0, issues };
 }

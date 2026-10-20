@@ -1,5 +1,5 @@
 {
-  "description": "Shared validator cases. Read by tests/validator.test.ts (TypeScript) and agent/tests/test_validator.py (Python). expectedCodes lists issue codes in order; messageIncludes are substrings of the joined issue messages.",
+  "description": "Shared validator cases. Read by tests/validator.test.ts (TypeScript) and agent/tests/test_validator.py (Python). expectedCodes lists issue codes in order; messageIncludes are substrings of the joined issue messages; expectedStatus, when present, is the Rule D hypothesis status; missingData, when present, is passed as the proposal's missing-data list.",
   "registries": {
     "demo": [
       {
@@ -470,6 +470,168 @@
       "messageIncludes": [
         "registered to this NCR such as TR-104"
       ]
+    },
+    {
+      "name": "D: hypothesis from a precedent without current-lot evidence is allowed but unverified",
+      "text": "Hypothesis (historical, not validated): worn spray gun nozzle, as recorded in NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": [],
+      "expectedStatus": "unverified_hypothesis"
+    },
+    {
+      "name": "D: root cause stated as confirmed without current-lot evidence fails",
+      "text": "Root cause is confirmed: worn spray gun nozzle, as in NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": [
+        "ROOT_CAUSE_CLAIMED_CONFIRMED"
+      ],
+      "expectedStatus": "unverified_hypothesis",
+      "messageIncludes": [
+        "No current-lot evidence is registered for NCR-2026-100"
+      ]
+    },
+    {
+      "name": "D: 'confirmed root cause' without current-lot evidence fails",
+      "text": "Confirmed root cause: nozzle wear per NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": [
+        "ROOT_CAUSE_CLAIMED_CONFIRMED"
+      ],
+      "expectedStatus": "unverified_hypothesis"
+    },
+    {
+      "name": "D: 'root cause verified' without current-lot evidence fails",
+      "text": "The root cause was verified on the line, see NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": [
+        "ROOT_CAUSE_CLAIMED_CONFIRMED"
+      ],
+      "expectedStatus": "unverified_hypothesis"
+    },
+    {
+      "name": "D: Indonesian confirmed claim without current-lot evidence fails",
+      "text": "Akar masalah sudah terkonfirmasi: nozzle aus, lihat NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": [
+        "ROOT_CAUSE_CLAIMED_CONFIRMED"
+      ],
+      "expectedStatus": "unverified_hypothesis"
+    },
+    {
+      "name": "D: a negated confirmation passes",
+      "text": "Root cause not yet confirmed; hypothesis nozzle wear per NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": [],
+      "expectedStatus": "unverified_hypothesis"
+    },
+    {
+      "name": "D: Indonesian negated confirmation passes",
+      "text": "Akar masalah belum terkonfirmasi; hipotesis nozzle aus per NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": [],
+      "expectedStatus": "unverified_hypothesis"
+    },
+    {
+      "name": "D: 'unverified hypothesis' passes",
+      "text": "Unverified hypothesis: nozzle wear per NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": [],
+      "expectedStatus": "unverified_hypothesis"
+    },
+    {
+      "name": "D: a historical cause 'confirmed by inspection' is not a claim about the current root cause",
+      "text": "Hypothesis: vent channel blockage confirmed by tooling inspection in NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": [],
+      "expectedStatus": "unverified_hypothesis"
+    },
+    {
+      "name": "D: empty missing data fails without current-lot evidence",
+      "text": "Hypothesis (historical, not validated): nozzle wear per NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": [
+        "MISSING_DATA_REQUIRED"
+      ],
+      "expectedStatus": "unverified_hypothesis",
+      "missingData": []
+    },
+    {
+      "name": "D: non-empty missing data passes",
+      "text": "Hypothesis (historical, not validated): nozzle wear per NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": [],
+      "expectedStatus": "unverified_hypothesis",
+      "missingData": [
+        "Current-lot DFT readings."
+      ]
+    },
+    {
+      "name": "D: with registered current-lot evidence a confirmed claim is allowed",
+      "text": "Root cause confirmed by trial TR-104, as in NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "demo",
+      "expectedCodes": [],
+      "expectedStatus": "evidence_registered",
+      "missingData": []
     }
   ]
 }
