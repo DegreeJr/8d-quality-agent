@@ -28,6 +28,12 @@ export interface Report {
     // Historical NCRs the agent's tools returned for the last D4 proposal. Rule A uses these when present.
     agentRetrieved?: { id: string; title: string; score: number | null }[];
 }
+// Mode and model reported by the last agent response, for labels.
+export interface AgentInfo {
+    mode: string;
+    model_id: string | null;
+    model_name?: string | null;
+}
 export interface CAPA {
     id: string;
     ncrId: string;
@@ -92,5 +98,7 @@ export interface AppState {
     reports: Report[];
     capas: CAPA[];
     audit: AuditEvent[];
+    // Last agent response's mode and model (local backend only).
+    agent?: AgentInfo;
 }
 export const disciplines = ['Establish the Team', 'Describe the Problem', 'Interim Containment', 'Identify Root Causes', 'Permanent Corrective Actions', 'Implement & Validate', 'Prevent Recurrence', 'Recognize the Team'];

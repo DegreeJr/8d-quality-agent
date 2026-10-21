@@ -1,6 +1,6 @@
 // Typed client for the quality agent (agent/ in this repo). The UI uses it only when
 // NEXT_PUBLIC_AGENT_BACKEND=local; otherwise the local simulation stays in place.
-import type { EvidenceRecord, NCR } from './types';
+import type { AgentInfo, EvidenceRecord, NCR } from './types';
 
 export type AgentBackend = 'simulated' | 'local';
 // Inlined at build time; must be referenced literally (see Next.js environment variable docs).
@@ -68,12 +68,25 @@ export function parseAgentResponse(json: unknown): AgentResponse {
     return r;
 }
 
-export function agentLabel(r: Pick<AgentResponse, 'mode' | 'model_id' | 'model_name'>) {
+export function agentLabel(r: AgentInfo) {
     if (r.mode === 'mock')
         return 'local agent, mock mode without a model';
     if (r.mode === 'sap')
         return 'SAP AI Core (' + (r.model_name || r.model_id || 'unknown deployment') + ')';
     return r.mode + (r.model_name || r.model_id ? ' ' + (r.model_name || r.model_id) : '');
+}
+
+// Labels for the header badge and sidebar. The agent's mode and model are known only from its last response.
+export function backendLabel(backend: AgentBackend, info?: AgentInfo): { badge: string; summary: string } {
+    if (backend === 'simulated')
+        return { badge: 'SIMULATION MODE', summary: 'Simulated intelligence.' };
+    if (!info)
+        return { badge: 'LOCAL AGENT', summary: 'Local agent. Mode shown after the first D4 proposal.' };
+    if (info.mode === 'mock')
+        return { badge: 'LOCAL AGENT · MOCK', summary: 'Local agent, mock mode without a model.' };
+    if (info.mode === 'sap')
+        return { badge: 'SAP AI CORE · ' + (info.model_name || info.model_id || 'unknown deployment'), summary: agentLabel(info) + ' via local agent.' };
+    return { badge: 'LOCAL AGENT · ' + agentLabel(info).toUpperCase(), summary: 'Local agent, ' + agentLabel(info) + '.' };
 }
 
 // D4 draft text from an agent response. Rejected proposals become an "evidence missing" draft.

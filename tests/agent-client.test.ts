@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { AgentError, agentDraft, buildAgentRequest, parseAgentResponse, proposeRootCause, type AgentResponse } from '../src/lib/agent-client';
+import { AgentError, agentDraft, backendLabel, buildAgentRequest, parseAgentResponse, proposeRootCause, type AgentResponse } from '../src/lib/agent-client';
 import { forwardToAgent } from '../src/lib/agent-proxy';
 import { createInitialState, evidenceRegistry } from '../src/lib/data';
 import { rootCauseCheck } from '../src/lib/workflow';
@@ -87,4 +87,15 @@ test('proxy forwards to /invocations and maps agent errors', async () => {
     const result = await forwardToAgent({}, 'http://agent', down);
     assert.equal(result.status, 502);
     assert.match((result.body as { error: string }).error, /Agent unavailable at http:\/\/agent\/invocations/);
+});
+
+test('mode labels follow the backend and the model named in the last agent response', () => {
+    assert.equal(backendLabel('simulated').badge, 'SIMULATION MODE');
+    assert.equal(backendLabel('simulated', { mode: 'sap', model_id: 'd1', model_name: 'gpt-5.4' }).badge, 'SIMULATION MODE');
+    assert.equal(backendLabel('local').badge, 'LOCAL AGENT');
+    assert.equal(backendLabel('local', { mode: 'mock', model_id: null, model_name: null }).badge, 'LOCAL AGENT · MOCK');
+    const sap = backendLabel('local', { mode: 'sap', model_id: 'd1a82575de60e02a', model_name: 'gpt-5.4' });
+    assert.equal(sap.badge, 'SAP AI CORE · gpt-5.4');
+    assert.equal(sap.summary, 'SAP AI Core (gpt-5.4) via local agent.');
+    assert.doesNotMatch(sap.summary + backendLabel('local').summary, /simulat/i);
 });

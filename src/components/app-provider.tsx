@@ -95,7 +95,7 @@ export function AppProvider({ children }: {
                 const agentEvents = [event(id, agentAuditAction(r), 'AI', 'Quality agent (' + agentLabel(r) + ')')];
                 if (!r.accepted)
                     agentEvents.unshift(event(id, 'Agent output withheld by the root cause check; draft states evidence missing.', 'System'));
-                return { ...next, audit: [...validationEvents(next, id, step, draft, 'generated'), ...agentEvents, ...s.audit] };
+                return { ...next, agent: { mode: r.mode, model_id: r.model_id, model_name: r.model_name ?? null }, audit: [...validationEvents(next, id, step, draft, 'generated'), ...agentEvents, ...s.audit] };
             });
             setNotice('Agent proposal ready (' + agentLabel(r) + '). Review and validate before approval.');
             return true;
