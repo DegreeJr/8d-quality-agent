@@ -12,7 +12,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000.
+Open http://127.0.0.1:3000. The dev server listens on 127.0.0.1 only, so it is not reachable from other machines on the network.
 
 ## Start the demo on Windows
 
@@ -23,7 +23,7 @@ start-demo.bat          :: SAP AI Core (default)
 start-demo.bat mock     :: local agent in mock mode, no model, no network
 ```
 
-It opens two cmd windows, "8D Agent" (`agent\.venv\Scripts\python -m quality_agent.app` with `AGENT_MODE` set) and "8D Web" (`npm run dev` with `NEXT_PUBLIC_AGENT_BACKEND=local` and `AGENT_URL=http://127.0.0.1:8080`), waits until http://localhost:3000 answers (up to about 90 s), then opens http://localhost:3000/workspace in the default browser. Close both windows to stop the demo.
+It opens two cmd windows, "8D Agent" (`agent\.venv\Scripts\python -m quality_agent.app` with `AGENT_MODE` set) and "8D Web" (`npm run dev` with `NEXT_PUBLIC_AGENT_BACKEND=local` and `AGENT_URL=http://127.0.0.1:8080`), waits until http://127.0.0.1:3000 answers (up to about 90 s), then opens http://127.0.0.1:3000/workspace in the default browser. Close both windows to stop the demo.
 
 Requirements: `npm install` done, and `agent\.venv` set up as in `agent/README.md`. Mode `sap` expects the service key at `%USERPROFILE%\sap-keys\aicore-key.json` and uses deployment `d1a82575de60e02a` with model name `gpt-5.4`; if the file is missing the script stops and suggests `start-demo.bat mock`. The script only checks that the key file exists; it never reads or prints it. It uses cmd, not PowerShell, because PowerShell on some machines blocks `npm.ps1`.
 

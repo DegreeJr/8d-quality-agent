@@ -48,16 +48,17 @@ set "SAP_DEPLOYMENT_ID="
 set "SAP_MODEL_NAME="
 set "NEXT_PUBLIC_AGENT_BACKEND=local"
 set "AGENT_URL=http://127.0.0.1:8080"
+rem npm run dev listens on 127.0.0.1 only; the agent also binds 127.0.0.1 outside Docker.
 start "8D Web" /D "%ROOT%." cmd /k "npm run dev"
 
-echo Agent mode: %MODE%. Waiting for http://localhost:3000 ...
+echo Agent mode: %MODE%. Waiting for http://127.0.0.1:3000 ...
 set /a TRIES=0
 :wait
 timeout /t 3 /nobreak >nul
 set /a TRIES+=1
-curl.exe -s -o nul --max-time 5 http://localhost:3000/workspace && goto open
+curl.exe -s -o nul --max-time 5 http://127.0.0.1:3000/workspace && goto open
 if %TRIES% lss 30 goto wait
 echo The web server did not answer yet; opening the browser anyway.
 :open
-start "" "http://localhost:3000/workspace"
+start "" "http://127.0.0.1:3000/workspace"
 endlocal
