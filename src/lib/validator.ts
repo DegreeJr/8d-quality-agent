@@ -18,11 +18,17 @@
 //   record is registered to that NCR, the result is hypothesisStatus "unverified_hypothesis".
 //   A hypothesis from precedents is still allowed, but the text must not state the root cause as
 //   confirmed (ROOT_CAUSE_CLAIMED_CONFIRMED), and when options.missingData is given it must not be
-//   empty (MISSING_DATA_REQUIRED). With registered evidence the status is "evidence_registered".
+//   empty (MISSING_DATA_REQUIRED). A sentence that states the root cause (ROOT_CAUSE_ASSERTIONS) must be
+//   phrased as a hypothesis (HEDGES: "hypothesis", "possible", "may", "likely", "hipotesis", ...), otherwise
+//   ROOT_CAUSE_STATED_AS_FACT. With registered evidence the status is "evidence_registered".
+// Rule E (uncited root cause): when cases were retrieved, a text that states a root cause must cite at least
+//   one retrieved NCR or one current-lot evidence id (registered to the current NCR when a registry is given).
+//   Otherwise: ROOT_CAUSE_UNCITED. The check is per text, not per sentence. With nothing retrieved Rule C
+//   applies instead, and a generic claim already rejected by Rule B is not reported twice.
 
 import type { EvidenceRecord } from './types';
 
-export type ValidationIssueCode = 'CITATION_NOT_RETRIEVED' | 'GENERIC_CLAIM_UNSUPPORTED' | 'ROOT_CAUSE_WITHOUT_EVIDENCE' | 'ROOT_CAUSE_CLAIMED_CONFIRMED' | 'MISSING_DATA_REQUIRED';
+export type ValidationIssueCode = 'CITATION_NOT_RETRIEVED' | 'GENERIC_CLAIM_UNSUPPORTED' | 'ROOT_CAUSE_WITHOUT_EVIDENCE' | 'ROOT_CAUSE_CLAIMED_CONFIRMED' | 'ROOT_CAUSE_STATED_AS_FACT' | 'MISSING_DATA_REQUIRED' | 'ROOT_CAUSE_UNCITED';
 export type HypothesisStatus = 'unverified_hypothesis' | 'evidence_registered';
 
 export interface ValidationIssue {
@@ -94,6 +100,17 @@ const CLAIMED_CONFIRMED: readonly RegExp[] = [
     /\b(?:terkonfirmasi|dikonfirmasi|terverifikasi)\s+sebagai\s+(?:akar|penyebab)\b/i
 ];
 
+// Words that mark a root cause statement as a hypothesis rather than a fact (Rule D).
+const HEDGES = /\b(?:hypothes[ie]s|hypothesi[sz]ed|hypothetical|possibl[ey]|may|might|could|likely|probabl[ey]|suspected|candidate|potential(?:ly)?|unverified|not\s+(?:yet\s+)?(?:validated|verified|confirmed)|hipotesis|kemungkinan|mungkin|diduga|dugaan|berpotensi|belum\s+(?:terverifikasi|divalidasi|terkonfirmasi|dikonfirmasi))\b/i;
+
+function sentencesOf(text: string) {
+    return text.split(/[.!?;\n]+/);
+}
+
+function assertsRootCause(text: string) {
+    return ROOT_CAUSE_ASSERTIONS.some(r => r.test(text));
+}
+
 function escapeRegExp(s: string) {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -139,7 +156,7 @@ function assertsAsCause(sentence: string, phrase: string) {
 
 // Generic phrases the text actually claims, ignoring mentions that are rejected or negated.
 export function genericClaimsIn(text: string): string[] {
-    const sentences = text.split(/[.!?;\n]+/);
+    const sentences = sentencesOf(text);
     return GENERIC_PHRASES.filter(phrase => sentences.some(sentence => {
         const occurrences = [...sentence.matchAll(new RegExp('\\b' + phraseSource(phrase) + '\\b', 'gi'))];
         if (!occurrences.length)
@@ -203,10 +220,11 @@ export function validateRootCause(text: string, retrievedIds: readonly string[],
 
     // Rule B
     const generic = genericClaimsIn(text);
+    const citesRetrieved = cited.some(id => retrieved.has(id));
+    const evidence = checkCurrentLotEvidence(text, options);
+    const hasEvidence = evidence.accepted.length > 0;
+    const asserts = assertsRootCause(text);
     if (generic.length) {
-        const citesRetrieved = cited.some(id => retrieved.has(id));
-        const evidence = checkCurrentLotEvidence(text, options);
-        const hasEvidence = evidence.accepted.length > 0;
         if (!citesRetrieved || !hasEvidence) {
             const example = options.evidenceRegistry ? options.evidenceRegistry.find(r => r.ncrId.toUpperCase() === current)?.id : 'TR-104';
             const evidenceNeed = 'a current-lot evidence id' + (options.evidenceRegistry ? ' registered to this NCR' : '') + (example ? ' such as ' + example : '') + (evidence.rejected.length ? ' (' + evidence.rejected.map(r => r.reason).join('; ') + ')' : '');
@@ -218,7 +236,6 @@ export function validateRootCause(text: string, retrievedIds: readonly string[],
     // Rule C
     if (retrieved.size === 0) {
         const statesMissing = MISSING_EVIDENCE_STATEMENTS.some(r => r.test(text));
-        const asserts = ROOT_CAUSE_ASSERTIONS.some(r => r.test(text));
         if (!statesMissing || asserts)
             issues.push({ code: 'ROOT_CAUSE_WITHOUT_EVIDENCE', message: ['No historical evidence was retrieved.', asserts && 'Do not assert a root cause.', !statesMissing && 'State that evidence is missing.'].filter(Boolean).join(' ') });
     }
@@ -229,12 +246,20 @@ export function validateRootCause(text: string, retrievedIds: readonly string[],
         const hasCurrentLot = options.evidenceRegistry.some(r => r.ncrId.toUpperCase() === current);
         hypothesisStatus = hasCurrentLot ? 'evidence_registered' : 'unverified_hypothesis';
         if (!hasCurrentLot) {
-            if (CLAIMED_CONFIRMED.some(r => r.test(text)))
+            const claimsConfirmed = CLAIMED_CONFIRMED.some(r => r.test(text));
+            if (claimsConfirmed)
                 issues.push({ code: 'ROOT_CAUSE_CLAIMED_CONFIRMED', message: 'No current-lot evidence is registered for ' + current + ', so the root cause is an unverified hypothesis and must not be stated as confirmed.' });
+            // With nothing retrieved Rule C already rejects any root cause assertion.
+            else if (retrieved.size > 0 && sentencesOf(text).some(s => assertsRootCause(s) && !HEDGES.test(s)))
+                issues.push({ code: 'ROOT_CAUSE_STATED_AS_FACT', message: 'No current-lot evidence is registered for ' + current + ', so state the root cause as a hypothesis (for example "Hypothesis: ...", "may", "likely"), not as a fact.' });
             if (options.missingData && options.missingData.length === 0)
                 issues.push({ code: 'MISSING_DATA_REQUIRED', message: 'No current-lot evidence is registered for ' + current + '. List the missing data needed to verify the hypothesis.' });
         }
     }
+
+    // Rule E
+    if (retrieved.size > 0 && asserts && !citesRetrieved && !hasEvidence && !issues.some(i => i.code === 'GENERIC_CLAIM_UNSUPPORTED'))
+        issues.push({ code: 'ROOT_CAUSE_UNCITED', message: 'The text states a root cause but cites none of the retrieved NCRs (' + [...retrieved].join(', ') + ')' + (options.evidenceRegistry ? ' and no current-lot evidence id registered to ' + (current ?? 'this NCR') : ' and no current-lot evidence id') + '. Cite the supporting record or phrase it as an open question.' });
 
     return hypothesisStatus ? { ok: issues.length === 0, issues, hypothesisStatus } : { ok: issues.length === 0, issues };
 }

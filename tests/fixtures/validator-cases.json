@@ -1,5 +1,5 @@
 {
-  "description": "Shared validator cases. Read by tests/validator.test.ts (TypeScript) and agent/tests/test_validator.py (Python). expectedCodes lists issue codes in order; messageIncludes are substrings of the joined issue messages; expectedStatus, when present, is the Rule D hypothesis status; missingData, when present, is passed as the proposal's missing-data list. Rule B ignores generic phrases that are themselves rejected or negated (B-context cases); B-smuggle cases must still fail.",
+  "description": "Shared validator cases. Read by tests/validator.test.ts (TypeScript) and agent/tests/test_validator.py (Python). expectedCodes lists issue codes in order; messageIncludes are substrings of the joined issue messages; expectedStatus, when present, is the Rule D hypothesis status; missingData, when present, is passed as the proposal's missing-data list. Rule B ignores generic phrases that are themselves rejected or negated (B-context cases); B-smuggle cases must still fail. Rule E (ROOT_CAUSE_UNCITED) and Rule D's ROOT_CAUSE_STATED_AS_FACT cases include the SAP AI Core outputs recorded in VERIFICATION.md, which must keep passing.",
   "registries": {
     "demo": [
       {
@@ -836,6 +836,316 @@
       ],
       "expectedCodes": [
         "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "SAP: gpt-5.4 case a, NCR-2026-100, first run 2026-10-21, passes",
+      "text": "Unverified hypothesis: coating thickness may be below specification due to a worn spray gun nozzle causing low and uneven coating output. This matches the confirmed causes in NCR-2024-063, NCR-2023-030, and NCR-2024-049, where spray pattern testing confirmed reduced and uneven output from worn nozzles. Cited: NCR-2024-063, NCR-2023-030, NCR-2024-049.",
+      "retrieved": [
+        "NCR-2024-063",
+        "NCR-2023-030",
+        "NCR-2024-049"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": [],
+      "expectedStatus": "unverified_hypothesis",
+      "missingData": [
+        "No current-lot evidence is registered for NCR-2026-100.",
+        "Spray pattern test result for the spray gun/nozzle used on the affected lot is needed to verify whether output is low or uneven.",
+        "Nozzle condition and replacement history for the equipment used on the affected lot is needed.",
+        "Current-lot dry film thickness measurement map by part/location is needed to compare the defect pattern with the historical nozzle-wear cases.",
+        "Verification of DFT gauge status/calibration used for the current inspection is needed."
+      ]
+    },
+    {
+      "name": "SAP: gpt-5.4 case a, NCR-2026-100, re-run 2026-10-21, passes",
+      "text": "Unverified hypothesis: worn spray gun nozzle causing low and uneven coating output, based on similar closed coating NCRs with the same confirmed cause. Cited: NCR-2024-063, NCR-2023-030, NCR-2024-049.",
+      "retrieved": [
+        "NCR-2024-063",
+        "NCR-2023-030",
+        "NCR-2024-049"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": [],
+      "expectedStatus": "unverified_hypothesis"
+    },
+    {
+      "name": "SAP: gpt-5.4 case b, NCR-2026-104 without registered evidence, re-run 2026-10-21, passes",
+      "text": "Unverified hypothesis: vent channel blockage, potentially from release-agent build-up, causing gas entrapment and pore clusters near the mounting boss/last-fill zone. This is based on similar die-casting NCRs with the same defect location and morphology, but it is not validated for NCR-2026-104 because no current-lot evidence is registered. Cited: NCR-2025-084, NCR-2023-002, NCR-2023-007.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2023-002",
+        "NCR-2023-007"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "none_for_104",
+      "expectedCodes": [],
+      "expectedStatus": "unverified_hypothesis"
+    },
+    {
+      "name": "E: uncited root cause fails on NCR-2026-104 (manual test step 16b)",
+      "text": "Root cause is low cure temperature.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "demo",
+      "expectedCodes": [
+        "ROOT_CAUSE_UNCITED"
+      ],
+      "expectedStatus": "evidence_registered",
+      "messageIncludes": [
+        "NCR-2025-084, NCR-2026-019"
+      ]
+    },
+    {
+      "name": "E+D: uncited root cause stated as fact fails on NCR-2026-100 after the agent retrieved 3 cases (manual test step 16b)",
+      "text": "Root cause is low cure temperature.",
+      "retrieved": [
+        "NCR-2024-063",
+        "NCR-2023-030",
+        "NCR-2024-049"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": [
+        "ROOT_CAUSE_STATED_AS_FACT",
+        "ROOT_CAUSE_UNCITED"
+      ],
+      "expectedStatus": "unverified_hypothesis"
+    },
+    {
+      "name": "E: citing a retrieved NCR passes",
+      "text": "Root cause is vent channel blockage per NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "demo",
+      "expectedCodes": []
+    },
+    {
+      "name": "E: citing registered current-lot evidence passes",
+      "text": "Root cause is vent channel blockage, see trial TR-104.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "demo",
+      "expectedCodes": []
+    },
+    {
+      "name": "E: evidence owned by another NCR does not count",
+      "text": "Root cause is vent channel blockage, see GR-032.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "demo",
+      "expectedCodes": [
+        "ROOT_CAUSE_UNCITED"
+      ]
+    },
+    {
+      "name": "E: citing only a non-retrieved NCR fails twice",
+      "text": "Root cause is vent channel blockage per NCR-2026-032.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "demo",
+      "expectedCodes": [
+        "CITATION_NOT_RETRIEVED",
+        "ROOT_CAUSE_UNCITED"
+      ]
+    },
+    {
+      "name": "E: without a registry, uncited 'Root cause:' fails",
+      "text": "Root cause: worn nozzle.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "ROOT_CAUSE_UNCITED"
+      ]
+    },
+    {
+      "name": "E: 'caused by' without a citation fails",
+      "text": "The defect was caused by low cure temperature.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "ROOT_CAUSE_UNCITED"
+      ]
+    },
+    {
+      "name": "E: Indonesian uncited root cause fails",
+      "text": "Akar masalah adalah suhu curing rendah.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "ROOT_CAUSE_UNCITED"
+      ]
+    },
+    {
+      "name": "E: text without a root cause statement needs no citation",
+      "text": "Check coating line parameters.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": []
+    },
+    {
+      "name": "E: undecided root cause needs no citation",
+      "text": "Root cause: unknown. Collect process logs first.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": []
+    },
+    {
+      "name": "E: generic claim is reported by Rule B only",
+      "text": "root cause: human error",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ]
+    },
+    {
+      "name": "D-fact: cited root cause stated as fact fails without current-lot evidence",
+      "text": "Root cause is worn spray gun nozzle, as in NCR-2024-063.",
+      "retrieved": [
+        "NCR-2024-063",
+        "NCR-2023-030",
+        "NCR-2024-049"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": [
+        "ROOT_CAUSE_STATED_AS_FACT"
+      ],
+      "expectedStatus": "unverified_hypothesis"
+    },
+    {
+      "name": "D-fact: 'likely' makes it a hypothesis",
+      "text": "Root cause is likely a worn spray gun nozzle, as in NCR-2024-063.",
+      "retrieved": [
+        "NCR-2024-063",
+        "NCR-2023-030",
+        "NCR-2024-049"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": [],
+      "expectedStatus": "unverified_hypothesis"
+    },
+    {
+      "name": "D-fact: 'Possible root cause:' is a hypothesis",
+      "text": "Possible root cause: worn spray gun nozzle per NCR-2024-063.",
+      "retrieved": [
+        "NCR-2024-063",
+        "NCR-2023-030",
+        "NCR-2024-049"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": []
+    },
+    {
+      "name": "D-fact: the hedge must be in the same sentence",
+      "text": "Hypothesis: worn nozzle. Root cause is worn spray gun nozzle per NCR-2024-063.",
+      "retrieved": [
+        "NCR-2024-063",
+        "NCR-2023-030",
+        "NCR-2024-049"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": [
+        "ROOT_CAUSE_STATED_AS_FACT"
+      ]
+    },
+    {
+      "name": "D-fact: Indonesian root cause stated as fact fails",
+      "text": "Akar masalah adalah nozzle aus, lihat NCR-2024-063.",
+      "retrieved": [
+        "NCR-2024-063",
+        "NCR-2023-030",
+        "NCR-2024-049"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": [
+        "ROOT_CAUSE_STATED_AS_FACT"
+      ]
+    },
+    {
+      "name": "D-fact: Indonesian hypothesis passes",
+      "text": "Hipotesis: akar masalah adalah nozzle aus, lihat NCR-2024-063.",
+      "retrieved": [
+        "NCR-2024-063",
+        "NCR-2023-030",
+        "NCR-2024-049"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": []
+    },
+    {
+      "name": "D-fact: 'caused by' stated as fact fails",
+      "text": "The low thickness was caused by nozzle wear, as in NCR-2024-063.",
+      "retrieved": [
+        "NCR-2024-063",
+        "NCR-2023-030",
+        "NCR-2024-049"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": [
+        "ROOT_CAUSE_STATED_AS_FACT"
+      ]
+    },
+    {
+      "name": "D-fact: with registered evidence a stated root cause is allowed",
+      "text": "Root cause is vent channel blockage per NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "demo",
+      "expectedCodes": [],
+      "expectedStatus": "evidence_registered"
+    },
+    {
+      "name": "D-fact: a confirmed claim is reported once, as CLAIMED_CONFIRMED",
+      "text": "Root cause is confirmed: worn nozzle per NCR-2024-063.",
+      "retrieved": [
+        "NCR-2024-063",
+        "NCR-2023-030",
+        "NCR-2024-049"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": [
+        "ROOT_CAUSE_CLAIMED_CONFIRMED"
       ]
     }
   ]

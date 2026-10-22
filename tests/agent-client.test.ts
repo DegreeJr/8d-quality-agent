@@ -27,6 +27,18 @@ test('the Python mock response parses and its D4 draft passes the TypeScript roo
     assert.deepEqual(rootCauseCheck(s, 'NCR-2026-104', draft).issues, []);
 });
 
+test('the recorded SAP AI Core response for NCR-2026-100 gives a D4 draft that passes, and an uncited root cause fails', () => {
+    // Case a of the SAP rejection smoke test, 2026-10-21 (VERIFICATION.md), proposal fields as recorded.
+    const retrieved = [{ id: 'NCR-2024-063', score: 14.9314, title: 'Coating thickness below specification' }, { id: 'NCR-2023-030', score: 12.4444, title: 'Coating thickness below specification' }, { id: 'NCR-2024-049', score: 12.4444, title: 'Coating thickness below specification' }];
+    const r = parseAgentResponse({ status: 'success', mode: 'sap', model_id: 'd1a82575de60e02a', model_name: 'gpt-5.4', ncr_id: 'NCR-2026-100', proposal_status: 'unverified_hypothesis', proposal: { root_cause: 'Unverified hypothesis: coating thickness may be below specification due to a worn spray gun nozzle causing low and uneven coating output. This matches the confirmed causes in NCR-2024-063, NCR-2023-030, and NCR-2024-049, where spray pattern testing confirmed reduced and uneven output from worn nozzles.', cited_ncr_ids: retrieved.map(h => h.id), confidence: 'low', missing_data: ['No current-lot evidence is registered for NCR-2026-100.', 'Spray pattern test result for the spray gun/nozzle used on the affected lot is needed to verify whether output is low or uneven.', 'Nozzle condition and replacement history for the equipment used on the affected lot is needed.', 'Current-lot dry film thickness measurement map by part/location is needed to compare the defect pattern with the historical nozzle-wear cases.', 'Verification of DFT gauge status/calibration used for the current inspection is needed.'] }, raw_proposal: null, retrieved, validation: { ok: true, issues: [], hypothesis_status: 'unverified_hypothesis' }, accepted: true });
+    const s = createInitialState();
+    s.reports.find(rep => rep.ncrId === 'NCR-2026-100')!.agentRetrieved = r.retrieved;
+    const check = rootCauseCheck(s, 'NCR-2026-100', agentDraft(r));
+    assert.deepEqual(check.issues, []);
+    assert.equal(check.hypothesisStatus, 'unverified_hypothesis');
+    assert.deepEqual(rootCauseCheck(s, 'NCR-2026-100', 'Root cause is low cure temperature.').issues.map(i => i.code), ['ROOT_CAUSE_STATED_AS_FACT', 'ROOT_CAUSE_UNCITED']);
+});
+
 test('after an agent proposal, rule A uses the ids the agent retrieved', () => {
     const s = createInitialState();
     s.reports[0].agentRetrieved = contract.retrieved;

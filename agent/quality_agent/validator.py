@@ -8,7 +8,10 @@ Rule C (no evidence): with nothing retrieved, the text must state that evidence 
   not assert a root cause.
 Rule D (unverified hypothesis): with a registry and a current NCR that owns no registered evidence, the
   status is "unverified_hypothesis": a hypothesis from precedents is allowed, but it must not be stated as
-  confirmed, and a given missing-data list must not be empty. Otherwise the status is "evidence_registered".
+  confirmed, a sentence that states the root cause must be phrased as a hypothesis, and a given missing-data
+  list must not be empty. Otherwise the status is "evidence_registered".
+Rule E (uncited root cause): with cases retrieved, a text that states a root cause must cite a retrieved NCR
+  or a current-lot evidence id. Not reported again when Rule B already rejected a generic claim.
 Both suites run the cases in tests/fixtures/validator-cases.json.
 """
 
@@ -65,6 +68,20 @@ _CLAIMED_CONFIRMED = [re.compile(p, _FLAGS) for p in (
     r"\b(?:confirmed|verified|validated)\s+root\s+cause\b",
     r"\b(?:terkonfirmasi|dikonfirmasi|terverifikasi)\s+sebagai\s+(?:akar|penyebab)\b",
 )]
+
+# Words that mark a root cause statement as a hypothesis rather than a fact (Rule D).
+_HEDGES = re.compile(
+    r"\b(?:hypothes[ie]s|hypothesi[sz]ed|hypothetical|possibl[ey]|may|might|could|likely|probabl[ey]|suspected|candidate"
+    r"|potential(?:ly)?|unverified|not\s+(?:yet\s+)?(?:validated|verified|confirmed)|hipotesis|kemungkinan|mungkin|diduga"
+    r"|dugaan|berpotensi|belum\s+(?:terverifikasi|divalidasi|terkonfirmasi|dikonfirmasi))\b", _FLAGS)
+
+
+def _sentences(text: str) -> list[str]:
+    return re.split(r"[.!?;\n]+", text)
+
+
+def _asserts_root_cause(text: str) -> bool:
+    return any(r.search(text) for r in _ROOT_CAUSE_ASSERTIONS)
 
 UNVERIFIED = "unverified_hypothesis"
 EVIDENCE_REGISTERED = "evidence_registered"
@@ -145,7 +162,7 @@ def _asserts_as_cause(sentence: str, phrase: str) -> bool:
 
 def generic_claims_in(text: str) -> list[str]:
     """Generic phrases the text actually claims, ignoring mentions that are rejected or negated."""
-    sentences = re.split(r"[.!?;\n]+", text)
+    sentences = _sentences(text)
 
     def claimed(phrase: str, sentence: str) -> bool:
         occurrences = list(re.finditer(r"\b" + _phrase_source(phrase) + r"\b", sentence, _FLAGS))
@@ -203,10 +220,11 @@ def validate_root_cause(text: str, retrieved_ids: Sequence[str], *, current_ncr_
 
     # Rule B
     generic = generic_claims_in(text)
+    cites_retrieved = any(i in retrieved for i in cited)
+    accepted, rejected = check_current_lot_evidence(text, current, evidence_registry, evidence_prefixes)
+    has_evidence = bool(accepted)
+    asserts = _asserts_root_cause(text)
     if generic:
-        cites_retrieved = any(i in retrieved for i in cited)
-        accepted, rejected = check_current_lot_evidence(text, current, evidence_registry, evidence_prefixes)
-        has_evidence = bool(accepted)
         if not cites_retrieved or not has_evidence:
             if evidence_registry is not None:
                 example = next((r.id for r in evidence_registry if r.ncr_id.upper() == current), None)
@@ -227,7 +245,6 @@ def validate_root_cause(text: str, retrieved_ids: Sequence[str], *, current_ncr_
     # Rule C
     if not retrieved:
         states_missing = any(r.search(text) for r in _MISSING_EVIDENCE_STATEMENTS)
-        asserts = any(r.search(text) for r in _ROOT_CAUSE_ASSERTIONS)
         if not states_missing or asserts:
             parts = ["No historical evidence was retrieved."]
             if asserts:
@@ -246,9 +263,24 @@ def validate_root_cause(text: str, retrieved_ids: Sequence[str], *, current_ncr_
                 issues.append(ValidationIssue("ROOT_CAUSE_CLAIMED_CONFIRMED",
                                               "No current-lot evidence is registered for " + current + ", so the root cause is an "
                                               "unverified hypothesis and must not be stated as confirmed."))
+            # With nothing retrieved Rule C already rejects any root cause assertion.
+            elif retrieved and any(_asserts_root_cause(s) and not _HEDGES.search(s) for s in _sentences(text)):
+                issues.append(ValidationIssue("ROOT_CAUSE_STATED_AS_FACT",
+                                              "No current-lot evidence is registered for " + current + ", so state the root cause as a "
+                                              'hypothesis (for example "Hypothesis: ...", "may", "likely"), not as a fact.'))
             if missing_data is not None and len(missing_data) == 0:
                 issues.append(ValidationIssue("MISSING_DATA_REQUIRED",
                                               "No current-lot evidence is registered for " + current
                                               + ". List the missing data needed to verify the hypothesis."))
+
+    # Rule E
+    if retrieved and asserts and not cites_retrieved and not has_evidence \
+            and not any(i.code == "GENERIC_CLAIM_UNSUPPORTED" for i in issues):
+        issues.append(ValidationIssue(
+            "ROOT_CAUSE_UNCITED",
+            "The text states a root cause but cites none of the retrieved NCRs (" + ", ".join(_unique_upper(retrieved_ids)) + ")"
+            + (" and no current-lot evidence id registered to " + (current or "this NCR") if evidence_registry is not None
+               else " and no current-lot evidence id")
+            + ". Cite the supporting record or phrase it as an open question."))
 
     return ValidationResult(ok=not issues, issues=issues, hypothesis_status=status)
