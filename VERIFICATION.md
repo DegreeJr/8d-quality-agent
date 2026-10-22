@@ -1,15 +1,15 @@
 # Verification status
 
-Last verified: 2026-10-22, branch `feat/validator-and-data`, Windows 11, Node.js v24.19.0, npm 11.17.0, Python 3.12.10.
+Last verified: 2026-10-23, branch `feat/validator-and-data`, Windows 11, Node.js v24.19.0, npm 11.17.0, Python 3.12.10.
 
 ## Passed (run by the agent, output observed)
 
 - `npm install`: 427 packages added. npm reports 5 high severity advisories, all in devDependencies (`npm audit --omit=dev` reports 0). `npm audit fix --force` was not run.
 - `npm run typecheck`: `tsc --noEmit`, exit 0, no errors.
 - `npm run lint`: `eslint .`, exit 0, no errors or warnings.
-- `npm test` (2026-10-22): 103 tests, 103 pass, 0 fail (6 workflow including the D5 draft wording, 75 shared validator fixture cases including 12 for Rule D and 19 for Rule B negation context, 7 D4, registry and approval-lock integration, 5 retrieval and dataset, 10 agent client and proxy including the mode labels).
-- `pytest` in `agent/` (strands-agents 1.61.1, bedrock-agentcore 1.24.2, openai 2.54.0, pytest 9.1.1): 122 passed (checked 2026-10-22). Includes the same 75 validator fixture cases, 5 Rule B and Rule D service tests, the agent response contract for NCR-2026-104, 14 SAP AI Core tests with mocked HTTP and fake keys, and a guard that fails any test creating an AWS client or calling an AWS API.
-- `npm run build` (re-run 2026-10-22): Next.js 16.4.0 (Turbopack) production build succeeded; 7 pages prerendered as static content, `/api/agent/root-cause` dynamic. The prerendered `/workspace` HTML contains the D4 draft "Candidate precedents (historical, not validated): NCR-2025-084 ...", "Root cause check: pass" and "Registered current-lot evidence for NCR-2026-104: TR-104 (Trial report), PL-104 (Parameter log)".
+- `npm test` (2026-10-23): 131 tests, 131 pass, 0 fail (9 workflow including the D5 draft wording, the reset-confirmation helper and agent failure and success transitions, 99 shared validator fixture cases including 12 for Rule D, 19 for Rule B negation context, 3 recorded SAP AI Core outputs and 21 for Rule E and the hypothesis wording, 7 D4, registry and approval-lock integration, 5 retrieval and dataset, 11 agent client and proxy including the mode labels and the recorded SAP D4 draft).
+- `pytest` in `agent/` (strands-agents 1.61.1, bedrock-agentcore 1.24.2, openai 2.54.0, pytest 9.1.1): 146 passed (checked 2026-10-23). Includes the same 99 validator fixture cases, 5 Rule B and Rule D service tests, the agent response contract for NCR-2026-104, 14 SAP AI Core tests with mocked HTTP and fake keys, and a guard that fails any test creating an AWS client or calling an AWS API.
+- `npm run build` (re-run 2026-10-23): Next.js 16.4.0 (Turbopack). The first attempt stopped with `SecurityFatalError: Your version of Next.js is affected by a known security vulnerability`, recommending a Next.js upgrade; the upgrade was not run. The second attempt succeeded; 7 pages prerendered as static content, `/api/agent/root-cause` dynamic. The prerendered `/workspace` HTML contains the D4 draft "Candidate precedents (historical, not validated): NCR-2025-084 ...", "Root cause check: pass" and "Registered current-lot evidence for NCR-2026-104: TR-104 (Trial report), PL-104 (Parameter log)".
 - `npm run data:generate`: "seed 20261031: 200 NCRs (5 anchors), 400 evidence records, 30 eval cases held out". Running it twice produced byte-identical files (same SHA-256).
 - `npm run eval:retrieval`: corpus 170 NCRs, 30 held-out cases, keyword baseline: hit@1 = 27/30 = 0.9, hit@3 = 30/30 = 1. This is a regression check on synthetic data, not a claim about impact or real-world accuracy (see below).
 - Local end to end (mock mode, no AWS): `python -m quality_agent.app` served `GET /ping` -> `{"status":"Healthy",...}`. With `NEXT_PUBLIC_AGENT_BACKEND=local` and `npm run dev`, `POST /api/agent/root-cause` for NCR-2026-104 returned HTTP 200 with a body identical to `tests/fixtures/agent-response-mock-104.json` (accepted, retrieved NCR-2025-084, NCR-2023-002, NCR-2023-007). An invalid action returned HTTP 400; with the agent stopped the route returned HTTP 502 "Agent unavailable ...". The agent log contained only the startup line (mode, model id None, region, corpus size).
@@ -24,6 +24,23 @@ Last verified: 2026-10-22, branch `feat/validator-and-data`, Windows 11, Node.js
 - Mode labels in the prerendered `/workspace` HTML (2026-10-22): the default build contains "SIMULATION MODE", "Simulated intelligence." and "Demo processing uses predefined suggestions. No real AI inference."; a build with `NEXT_PUBLIC_AGENT_BACKEND=local` contains "LOCAL AGENT", "Agent backend: local" and "D4 proposals come from the local agent. Its mode is shown after the first proposal." and none of the simulation strings. The labels after an agent response ("LOCAL AGENT · MOCK", "SAP AI CORE · gpt-5.4") are covered by unit tests only, not seen in a browser.
 - `start-demo.bat` (2026-10-22, run by the agent): an unknown argument prints the usage and exits 1; mode `sap` with no key file prints the missing path and suggests `start-demo.bat mock`, exit 1. The full launch (two windows, browser) was not run by the agent.
 - Manual click test, round 1 (2026-10-21, run by the team, mode local with the SAP agent; result reported to the agent): steps 1 to 5 of the manual browser checklist below passed. Not observed: the "Save changes first" text in step 2. Found during the test and fixed 2026-10-22: the header badge "SIMULATION MODE", the sidebar "Demo agent ready: Simulated intelligence" and the workspace note "Demo processing uses predefined suggestions. No real AI inference." showed in agent mode; the simulated D5 draft said "review the confirmed cause" although D4 is a hypothesis (now "confirm the D4 hypothesis with current-lot evidence first").
+- Manual click test, rounds 2 and 3 (2026-10-22/23, run by the team, mode local with the SAP AI Core agent, gpt-5.4; result reported to the agent): steps 6 to 15, 16 (approval lock and Generate with the agent), 21 and 22 passed. Step 16b did not match the checklist: on NCR-2026-100, after Generate, `Root cause is low cure temperature.` gave "pass" instead of ROOT_CAUSE_WITHOUT_EVIDENCE, because the agent had retrieved 3 cases, so Rule C no longer applied. Found in the same rounds:
+  - The yellow banner "Evidence missing. No historical evidence is available for this case" stayed after the agent retrieved 3 cases.
+  - A reload always returned to NCR-2026-104 D4.
+  - Generate on a completed discipline reset all later approvals without warning (NCR-2026-100 went from 3/8 to 0/8 after two clicks on D1).
+  - After two "Agent call failed" errors the NCR-2026-104 D4 editor was empty with "Unsaved changes".
+  - The Root cause check panel said "pass" for an empty editor.
+  - The D4 approval dialog said "simulated suggestions" in agent mode.
+- Fixes for rounds 2 and 3 (2026-10-23, unit tested; not yet re-tested in a browser):
+  - Rule E (`ROOT_CAUSE_UNCITED`, TS and Python): when cases were retrieved, a text that states a root cause must cite a retrieved NCR or a current-lot evidence id registered to the open NCR.
+  - Rule D addition (`ROOT_CAUSE_STATED_AS_FACT`): without registered current-lot evidence, a sentence that states the root cause must be worded as a hypothesis ("hypothesis", "possible", "may", "likely", "hipotesis", ...). The agent's system prompt asks for this wording.
+  - The three recorded SAP outputs (case a first run and re-run, case b re-run) are fixture cases and still pass; the case a response also passes as a UI draft.
+  - The D4 banner follows the data. With nothing retrieved it says evidence is missing. With retrieved cases but no current-lot evidence it says the retrieved cases are historical references only and that no current-lot evidence is registered.
+  - The selected NCR and discipline are kept in the URL (`/workspace?case=NCR-2026-100&step=4`).
+  - Generate on a discipline with Complete or Approved status (itself or later) opens a confirmation dialog that lists the approvals it cancels.
+  - The panel shows "No content to check" for an empty editor.
+  - The approval dialog says "agent proposals" for D4 in agent mode.
+  - Empty editor after agent failures: not reproduced. In the code, a failed agent call only adds the audit event and the toast (`withAgentFailure`). The editor resets its text only when the saved D4 content changes. A unit test checks that two failures leave every section unchanged. The browser cause is unknown (see step 21).
 - `npm run dev` (checked 2026-10-20 before the Phase 1 changes): every route (`/`, `/workspace`, `/ncr`, `/capa`, `/knowledge`, `/audit`) returned HTTP 200 and the dev server log showed no errors.
 
 ## Not verified
@@ -32,6 +49,7 @@ Last verified: 2026-10-22, branch `feat/validator-and-data`, Windows 11, Node.js
 - SAP AI Core beyond the smoke tests above: `AGENT_MODE=sap` is otherwise covered by unit tests with mocked HTTP and fake keys (token request, endpoint, headers, api-version, a full Strands tool loop, validator enforcement, no secrets in logs). Not yet verified against the real service: the rejection paths (run twice on 2026-10-21; model output varies between runs, and two runs are not a measure of reliability), token lifetime, latency, and repeatability across runs. Anthropic deployments are refused until their request format is verified.
 - Nothing has run against AWS. `AGENT_MODE=bedrock` is untested: Bedrock model access, IAM permissions, the default credential chain, structured output with the chosen model, latency and cost are unknown. Code that depends on this is marked TODO(verify). Deployment to AgentCore Runtime (ARM64 container) is not built.
 - Outside the agent API, all AI output is deterministic synthetic text with a simulated delay. The local agent in mock mode uses no model either.
+- Rule E and the hypothesis-wording check are pattern heuristics as well. Rule E looks at the whole text, so a root cause sentence passes when any other sentence cites a retrieved NCR. The hedge check passes a sentence that contains a hedge word for another reason ("Root cause is X, which may recur"). Root cause statements without a recognised assertion form ("Low cure temperature caused the defect") are not detected.
 - Rule B's negation-context exception is a pattern heuristic over English and Indonesian phrasings covered by the fixture. Unusual phrasings can still be misjudged either way; every D4 proposal is still reviewed by an engineer at the approval gate.
 - The evidence registry is synthetic and lives in code. The check proves a registered id owned by the open NCR is cited, not that the evidence supports the claim. The agent trusts `current_evidence` sent by the UI; a backend registry is needed.
 - The retrieval eval saturates: hit@3 is 30/30 because the generator draws from a small closed set of template sentences, so held-out queries share exact phrases with corpus records. The number does not show how the keyword baseline would do on real NCR text and cannot separate a better retriever from this one. A manually written eval set (schema in `data/manual-eval/`) is planned once a Bedrock retriever exists.
@@ -41,7 +59,7 @@ Last verified: 2026-10-22, branch `feat/validator-and-data`, Windows 11, Node.js
 
 ## Manual browser checklist
 
-Run `npm run dev`, open http://localhost:3000, reset the demo data from the profile menu, then open http://localhost:3000/workspace (NCR-2026-104, D4).
+Run `npm run dev`, open http://localhost:3000, reset the demo data from the profile menu, then open http://localhost:3000/workspace (NCR-2026-104, D4; the address changes to `/workspace?case=NCR-2026-104&step=4`).
 
 Existing flow
 1. D4 editor shows "Candidate precedents (historical, not validated): NCR-2025-084 (...); NCR-2026-019 (...)". Root cause check panel shows "pass" and "Registered current-lot evidence for NCR-2026-104: TR-104 (Trial report), PL-104 (Parameter log)".
@@ -61,15 +79,22 @@ Root cause check
 13. Approve with a note: the dialog shows "Root cause check failed: ...", D4 stays Draft, and a System event "Root cause check rejected D4 approval: GENERIC_CLAIM_UNSUPPORTED." is added.
 14. "Request revision" with a reason still works on the failing text.
 15. "Generate AI suggestion" restores the draft and the panel shows "pass".
-16. Select NCR-2026-100 (no historical cases), open D4: the "Evidence missing" draft passes, the panel shows "Status: unverified hypothesis" and "Registered current-lot evidence for NCR-2026-100: none", and Approve is disabled with "D4 approval is locked: no current-lot evidence is registered for NCR-2026-100 ...". Type `Root cause is low cure temperature.`: fail with ROOT_CAUSE_WITHOUT_EVIDENCE.
-17. Reload the page: saved state and audit events persist.
+16. Select NCR-2026-100 (no historical cases), open D4: the "Evidence missing" draft passes, the panel shows "Status: unverified hypothesis" and "Registered current-lot evidence for NCR-2026-100: none", and Approve is disabled with "D4 approval is locked: no current-lot evidence is registered for NCR-2026-100 ...". Type `Root cause is low cure temperature.`: fail with ROOT_CAUSE_WITHOUT_EVIDENCE (nothing retrieved, Rule C).
+16b. On NCR-2026-104 D4, type `Root cause is low cure temperature.`: fail with ROOT_CAUSE_UNCITED (no retrieved NCR or registered evidence cited). `Root cause is vent channel blockage per NCR-2025-084.` passes.
+17. Reload the page: saved state and audit events persist, and the same NCR and discipline stay open (from `?case=...&step=...`). Open `/workspace?case=NCR-2026-100&step=2` directly: NCR-2026-100 D2 opens.
 
 Local agent (optional)
 18. Start the agent (`agent/README.md` or `start-demo.bat mock`), then run the UI with `NEXT_PUBLIC_AGENT_BACKEND=local`. The workspace label reads "Agent API (local) · D4 only"; the header badge reads "LOCAL AGENT" and changes to "LOCAL AGENT · MOCK" (or "SAP AI CORE · gpt-5.4") after the first D4 proposal. D5 shows "D5 is simulated: predefined suggestions, no AI inference. Only D4 calls the agent."
 19. Reset the demo, open NCR-2026-104 D4, click "Generate AI suggestion": the draft starts "Agent proposal (local agent, mock mode without a model, not validated): Hypothesis (historical, not validated): Vent channel blockage ...", the Historical evidence card lists NCR-2025-084, NCR-2023-002 and NCR-2023-007 as "Retrieved by agent tools", the panel shows "pass", and the Audit Trail shows an AI event by "Quality agent (local agent, mock mode without a model)".
 20. Type `Similar to NCR-2026-019.` in D4: CITATION_NOT_RETRIEVED, because the agent did not retrieve it.
-21. Stop the agent and click Generate again: toast "Agent unavailable: ..." and a System audit event "Agent call failed: ...".
+21. Stop the agent and click Generate again: toast "Agent unavailable: ..." and a System audit event "Agent call failed: ...". Click Generate a second time: the editor text and its "Saved to browser" or "Unsaved changes" status stay exactly as before both clicks.
 22. With the agent running, open NCR-2026-100 D4 and Generate: the draft ends with "Status: unverified hypothesis, no current-lot evidence registered." and Approve stays locked. Type `Root cause is confirmed: worn nozzle, as in <a retrieved id>.`: fail with ROOT_CAUSE_CLAIMED_CONFIRMED.
+22b. Still on NCR-2026-100 D4 after Generate: the yellow banner reads "Current-lot evidence missing. The 3 retrieved cases (...) are historical references only. No current-lot evidence is registered for NCR-2026-100 yet ...", not "No historical evidence is available". Type `Root cause is low cure temperature.`: fail with ROOT_CAUSE_STATED_AS_FACT and ROOT_CAUSE_UNCITED. Type `Root cause is likely a worn spray gun nozzle, as in <a retrieved id>.`: pass.
+
+Fixes from rounds 2 and 3
+23. Clear the D4 editor completely: the panel reads "Root cause check: No content to check" (neutral colour), not "pass".
+24. In agent mode, open the D4 Approve dialog on NCR-2026-104: the warning reads "Historical similarity and agent proposals alone ...". On D5, and in simulated mode, it reads "simulated suggestions".
+25. Reset the demo, open NCR-2026-100 D1 (progress 3/8) and click "Generate AI suggestion": a dialog "Generate a new D1 suggestion?" lists D1, D2 and D3 with status Complete. Cancel: nothing changes, progress stays 3/8. Generate again and confirm: the draft is replaced and progress drops to 0/8. On D4 (Draft), Generate starts without a dialog.
 
 ## Raw output: SAP rejection smoke test, 2026-10-21 (verbatim, as pasted by the team)
 
