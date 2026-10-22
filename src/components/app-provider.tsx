@@ -1,10 +1,10 @@
 'use client';
 /* eslint-disable react-hooks/set-state-in-effect -- Hydrate browser-only storage and URL parameters after mount. */
 import { createContext, useContext, useEffect, useState } from 'react';
-import { AppState, NCR, CAPA, ReportSection } from '@/lib/types';
+import { AppState, NCR, CAPA } from '@/lib/types';
 import { createInitialState, evidenceRegistry, sectionDraft } from '@/lib/data';
 import { agentDraft, agentLabel, buildAgentRequest, proposeRootCause, type AgentResponse } from '@/lib/agent-client';
-import { reviewSection, canAccess, rootCauseCheck, rootCauseAuditAction } from '@/lib/workflow';
+import { reviewSection, canAccess, rootCauseCheck, rootCauseAuditAction, withAgentDraft, withAgentFailure } from '@/lib/workflow';
 interface Store {
     state: AppState;
     ready: boolean;
@@ -28,9 +28,6 @@ async function requestAgentProposal(n: NCR): Promise<{ ok: true; response: Agent
     catch (e) {
         return { ok: false, error: (e as Error).message };
     }
-}
-function withAgentDraft(s: AppState, id: string, step: number, draft: string, r: AgentResponse): AppState {
-    return { ...s, reports: s.reports.map(rep => rep.ncrId !== id ? rep : { ...rep, agentRetrieved: r.retrieved, sections: rep.sections.map((x, i): ReportSection => i === step ? { content: draft, status: 'Draft' } : i > step ? { ...x, status: x.content ? 'Draft' : 'Not started', feedback: undefined } : x) }) };
 }
 function agentAuditAction(r: AgentResponse) {
     return 'Generated D4 proposal; tools retrieved ' + (r.retrieved.map(h => h.id).join(', ') || 'no historical NCR') + '. Agent root cause check: ' + (r.accepted ? 'passed' : 'rejected (' + r.validation.issues.map(i => i.code).join(', ') + ')') + '.';
@@ -84,7 +81,7 @@ export function AppProvider({ children }: {
                 return false;
             const result = await requestAgentProposal(n);
             if (!result.ok) {
-                setState(s => ({ ...s, audit: [event(id, 'Agent call failed: ' + result.error, 'System'), ...s.audit] }));
+                setState(s => withAgentFailure(s, event(id, 'Agent call failed: ' + result.error, 'System')));
                 setNotice('Agent unavailable: ' + result.error);
                 return false;
             }

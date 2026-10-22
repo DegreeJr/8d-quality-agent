@@ -1,4 +1,5 @@
-import { AppState } from './types';
+import { AppState, AuditEvent, ReportSection } from './types';
+import type { AgentResponse } from './agent-client';
 import { validateRootCause, ValidationIssue, ValidationResult } from './validator';
 import { evidenceRegistry } from './data';
 export class RootCauseRejectedError extends Error {
@@ -34,6 +35,19 @@ export function rootCauseAuditAction(step: number, trigger: 'generated' | 'saved
     return 'Root cause check rejected D' + (step + 1) + (trigger === 'approval' ? ' approval' : ' ' + trigger + ' draft') + ': ' + issues.map(i => i.code).join(', ') + '.';
 }
 export function canAccess(state: AppState, id: string, step: number) { const report = state.reports.find(r => r.ncrId === id); return !!report && report.sections.slice(0, step).every((s, i) => i === 3 || i === 4 ? s.status === 'Approved' : s.status === 'Complete' || s.status === 'Approved'); }
+// Disciplines whose Complete or Approved status a new draft at `step` resets: the step itself and every later one.
+export function approvalsResetBy(state: AppState, id: string, step: number): number[] {
+    const sections = state.reports.find(r => r.ncrId === id)?.sections ?? [];
+    return sections.map((s, i) => i >= step && (s.status === 'Complete' || s.status === 'Approved') ? i : -1).filter(i => i >= 0);
+}
+// A successful agent proposal replaces the D4 draft and revokes later approvals.
+export function withAgentDraft(s: AppState, id: string, step: number, draft: string, r: AgentResponse): AppState {
+    return { ...s, reports: s.reports.map(rep => rep.ncrId !== id ? rep : { ...rep, agentRetrieved: r.retrieved, sections: rep.sections.map((x, i): ReportSection => i === step ? { content: draft, status: 'Draft' } : i > step ? { ...x, status: x.content ? 'Draft' : 'Not started', feedback: undefined } : x) }) };
+}
+// A failed agent call only records the failure; the report and the editor content stay as they were.
+export function withAgentFailure(s: AppState, failure: AuditEvent): AppState {
+    return { ...s, audit: [failure, ...s.audit] };
+}
 export function isOverdue(due: string, status: string) { return status !== 'Completed' && due < new Date().toISOString().slice(0, 10); }
 export function reviewSection(state: AppState, id: string, step: number, approve: boolean, feedback: string): AppState { if (!canAccess(state, id, step))
     throw new Error('Complete the preceding disciplines first.'); if ((step === 3 || step === 4) && !feedback.trim())
