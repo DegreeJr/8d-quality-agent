@@ -45,7 +45,7 @@ Last verified: 2026-10-23, branch `feat/validator-and-data`, Windows 11, Node.js
 - Manual retest, round 2 (2026-10-27, run by the team in Chrome with `start-demo.bat`, agent mode `sap`, Next.js 16.4.1; result reported to the agent, not observed by the agent). All steps below passed:
   - Step 15: Generate through SAP AI Core (gpt-5.4) succeeded, the panel showed "pass", the header badge read "SAP AI CORE · gpt-5.4", and the Agent timeline recorded a Quality agent event with 3 retrieved cases.
   - Step 23: an empty editor showed "No content to check".
-  - Step 25: Generate on the completed D1 of NCR-2026-100 opened the confirmation dialog; Cancel kept progress at 3/8. The confirm path (progress to 0/8) was not reported.
+  - Step 25: Generate on the completed D1 of NCR-2026-100 opened the dialog "Generate a new D1 suggestion?"; after Cancel, progress stayed at 3/8 (observed). Progress drops to 0/8 only when "Generate and cancel approvals" is chosen.
   - Step 16: NCR-2026-100 D4 was locked without current-lot evidence; Generate produced an unverified hypothesis that passed the panel.
   - Step 16b: ROOT_CAUSE_UNCITED appeared for a root cause without a citation.
   - Step 22: ROOT_CAUSE_CLAIMED_CONFIRMED appeared.
@@ -54,7 +54,8 @@ Last verified: 2026-10-23, branch `feat/validator-and-data`, Windows 11, Node.js
   - Steps 17 and 17b: a reload and opening `/workspace?case=NCR-2026-100&step=2` directly opened the correct NCR and discipline.
   - Step 21: with the agent stopped, Generate failed with the event "Agent call failed: Agent unavailable at http://127.0.0.1:8080/invocations", and the editor and its unsaved text stayed unchanged. Two click orders were tried; the empty editor bug from rounds 2 and 3 was not reproduced.
   - Latency: one Generate through SAP AI Core took about 17 to 27 seconds (from the agent log, a few runs, not a benchmark).
-  - Not covered by this retest: steps 18 to 20 and 24, the yellow banner text of step 22b after Generate, and the `Root cause is likely ...` pass case of step 22b.
+  - Step 24: the D4 Approve dialog warning was confirmed manually in the browser.
+  - Not covered by this retest: steps 18 to 20, the yellow banner text of step 22b after Generate, and the `Root cause is likely ...` pass case of step 22b.
 - `npm run dev` listens on 127.0.0.1 only (2026-10-23, Next.js 16.4.1): the log shows "Local: http://127.0.0.1:3000", `netstat` shows `127.0.0.1:3000 LISTENING`, http://127.0.0.1:3000/workspace returned HTTP 200 and the machine's LAN address could not connect. `start-demo.bat` waits for and opens http://127.0.0.1:3000/workspace; the agent binds 127.0.0.1 by default outside Docker (bedrock-agentcore `run`). `npm start` (`next start`) was not changed and still uses Next.js's default host.
 - `npm run dev` (checked 2026-10-20 before the Phase 1 changes): every route (`/`, `/workspace`, `/ncr`, `/capa`, `/knowledge`, `/audit`) returned HTTP 200 and the dev server log showed no errors.
 
@@ -110,7 +111,7 @@ Local agent (optional)
 Fixes from rounds 2 and 3
 23. Clear the D4 editor completely: the panel reads "Root cause check: No content to check" (neutral colour), not "pass".
 24. In agent mode, open the D4 Approve dialog on NCR-2026-104: the warning reads "Historical similarity and agent proposals alone ...". On D5, and in simulated mode, it reads "simulated suggestions".
-25. Reset the demo, open NCR-2026-100 D1 (progress 3/8) and click "Generate AI suggestion": a dialog "Generate a new D1 suggestion?" lists D1, D2 and D3 with status Complete. Cancel: nothing changes, progress stays 3/8. Generate again and confirm: the draft is replaced and progress drops to 0/8. On D4 (Draft), Generate starts without a dialog.
+25. Reset the demo, open NCR-2026-100 D1 (progress 3/8) and click "Generate AI suggestion": a dialog "Generate a new D1 suggestion?" lists D1, D2 and D3 with status Complete. Cancel: nothing changes, progress stays 3/8. Generate again and click "Generate and cancel approvals": the draft is replaced and progress drops to 0/8 (only this button resets progress, Cancel never does). On D4 (Draft), Generate starts without a dialog.
 
 ## Raw output: SAP rejection smoke test, 2026-10-21 (verbatim, as pasted by the team)
 
