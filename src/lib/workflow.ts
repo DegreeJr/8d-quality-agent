@@ -23,6 +23,12 @@ export function d4EvidenceBanner(ncrId: string, retrievedIds: string[], currentL
     }
     return null;
 }
+// Historical evidence card text when nothing was retrieved; worded like d4EvidenceBanner.
+export function noHistoricalEvidenceText(ncrId: string, currentLotIds: string[], byAgent: boolean): string {
+    if (currentLotIds.length)
+        return 'No historical precedent was retrieved' + (byAgent ? ' by the agent tools' : '') + '. Current-lot evidence registered for ' + ncrId + ': ' + currentLotIds.join(', ') + '.';
+    return byAgent ? 'Evidence missing. The agent retrieved no historical NCR.' : 'Evidence missing. Gather current-lot records before validating a hypothesis.';
+}
 // A human action in the UI is the only way to register evidence. The id must have a form the root cause check
 // recognises (PREFIX-NNN, see EVIDENCE_PREFIXES) and be unused, since the validator maps each id to one NCR.
 export function registerEvidence(state: AppState, ncrId: string, input: { id: string; kind: string; summary: string }, actor: string, now: string): AppState {

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createInitialState, sectionDraft } from '../src/lib/data';
-import { approvalsResetBy, canAccess, d4EvidenceBanner, ESCALATION_ACTOR, evidenceFor, isD4Locked, isOverdue, registerEvidence, registryOf, reviewSection, RootCauseRejectedError, rootCauseCheck, withAgentDraft, withAgentFailure, withEscalations } from '../src/lib/workflow';
+import { approvalsResetBy, canAccess, d4EvidenceBanner, ESCALATION_ACTOR, evidenceFor, isD4Locked, isOverdue, noHistoricalEvidenceText, registerEvidence, registryOf, reviewSection, RootCauseRejectedError, rootCauseCheck, withAgentDraft, withAgentFailure, withEscalations } from '../src/lib/workflow';
 import { buildAgentRequest, type AgentResponse } from '../src/lib/agent-client';
 import type { AuditEvent } from '../src/lib/types';
 test('D4 blocks D5 and D6 until a human approves', () => { const s = createInitialState(); assert.equal(canAccess(s, 'NCR-2026-104', 3), true); assert.equal(canAccess(s, 'NCR-2026-104', 4), false); assert.throws(() => reviewSection(s, 'NCR-2026-104', 3, true, ''), /validation evidence/); const reviewed = reviewSection(s, 'NCR-2026-104', 3, true, 'TR-104: current-lot controlled trial reviewed.'); assert.equal(canAccess(reviewed, 'NCR-2026-104', 4), true); assert.equal(canAccess(reviewed, 'NCR-2026-104', 5), false); });
@@ -135,4 +135,11 @@ test('the D4 banner names registered current-lot evidence when no historical pre
     assert.match(d4EvidenceBanner('NCR-2026-100', [], [])!, /^Evidence missing\. No historical evidence is available/);
     assert.match(d4EvidenceBanner('NCR-2026-100', ['NCR-2025-071'], [])!, /^Current-lot evidence missing\. The 1 retrieved case \(NCR-2025-071\) is a historical reference only\./);
     assert.equal(d4EvidenceBanner('NCR-2026-100', ['NCR-2025-071'], ['TR-100']), null);
+});
+
+test('the Historical evidence card matches the D4 banner when only current-lot evidence is registered', () => {
+    assert.equal(noHistoricalEvidenceText('NCR-2026-100', ['TR-100'], false), 'No historical precedent was retrieved. Current-lot evidence registered for NCR-2026-100: TR-100.');
+    assert.equal(noHistoricalEvidenceText('NCR-2026-100', ['TR-100'], true), 'No historical precedent was retrieved by the agent tools. Current-lot evidence registered for NCR-2026-100: TR-100.');
+    assert.equal(noHistoricalEvidenceText('NCR-2026-100', [], false), 'Evidence missing. Gather current-lot records before validating a hypothesis.');
+    assert.equal(noHistoricalEvidenceText('NCR-2026-100', [], true), 'Evidence missing. The agent retrieved no historical NCR.');
 });
