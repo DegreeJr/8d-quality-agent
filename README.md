@@ -71,6 +71,10 @@ In the app, D4 approval is refused while the check fails (`reviewSection` throws
 
 - **Rule G, upload as evidence** (`UPLOAD_AS_EVIDENCE`): a sentence that leans on an uploaded photo or document as evidence ("The photo shows pores near the boss.", "Foto menunjukkan porositas.") is rejected unless the same sentence cites a current-lot evidence id registered to the NCR ("The X-ray photo registered as TR-104 shows pores near the boss." passes) or says it is not evidence. Uploads are attachments; they never unlock D4.
 
+### D5 corrective action check
+
+With the local agent, D5 Generate (after D4 is approved) asks the agent for corrective actions. Each action must cite a retrieved NCR whose corrective action it reuses or a current-lot evidence id registered to the NCR; generic actions ("retrain operators", "increase inspection", "be more careful", "latih ulang operator", "tingkatkan inspeksi", "lebih hati-hati") need a registered evidence id; actions that contradict or ignore the approved D4 are withheld (`src/lib/action-validator.ts`, shared cases in `tests/fixtures/d5-action-cases.json`). In the editor the same check is shown for information only; D5 approval stays a human decision.
+
 ### Register current-lot evidence
 
 D4 approval stays locked while no current-lot evidence is registered for the open NCR (Rule D). An engineer lifts the lock in the D4 panel under "Register current-lot evidence": enter an id, pick a type (Trial report, Parameter log, Inspection record, Measurement), add a short description and click "Register evidence". Only this human action adds evidence; agent responses never do. The id must use a prefix the root cause check recognises (`TR`, `GR`, `TI`, `TD`, `VT`, `PL`, `FV`, `FP`, `LAB`), a hyphen and at least three digits, for example `TR-100`, and must not be registered already (to any NCR). Each registration is a Human audit event with the id and type. Records persist in localStorage; a demo reset removes them.

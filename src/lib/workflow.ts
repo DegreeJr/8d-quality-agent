@@ -103,6 +103,10 @@ export function approvalsResetBy(state: AppState, id: string, step: number): num
 export function withAgentDraft(s: AppState, id: string, step: number, draft: string, r: AgentResponse): AppState {
     return { ...s, reports: s.reports.map(rep => rep.ncrId !== id ? rep : { ...rep, agentRetrieved: r.retrieved, sections: rep.sections.map((x, i): ReportSection => i === step ? { content: draft, status: 'Draft' } : i > step ? { ...x, status: x.content ? 'Draft' : 'Not started', feedback: undefined } : x) }) };
 }
+// D5 draft from the agent. D4 and its retrieved cases stay as they are; later disciplines need review again.
+export function withActionDraft(s: AppState, id: string, draft: string, retrievedIds: string[]): AppState {
+    return { ...s, reports: s.reports.map(rep => rep.ncrId !== id ? rep : { ...rep, d5Retrieved: retrievedIds, sections: rep.sections.map((x, i): ReportSection => i === 4 ? { content: draft, status: 'Draft' } : i > 4 ? { ...x, status: x.content ? 'Draft' : 'Not started', feedback: undefined } : x) }) };
+}
 // A failed agent call only records the failure; the report and the editor content stay as they were.
 export function withAgentFailure(s: AppState, failure: AuditEvent): AppState {
     return { ...s, audit: [failure, ...s.audit] };

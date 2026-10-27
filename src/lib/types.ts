@@ -29,6 +29,8 @@ export interface Report {
     sections: ReportSection[];
     // Historical NCRs the agent's tools returned for the last D4 proposal. Rule A uses these when present.
     agentRetrieved?: { id: string; title: string; score: number | null }[];
+    // Historical NCRs the tools returned for the last D5 proposal; the D5 action check accepts citations of these.
+    d5Retrieved?: string[];
 }
 // Mode and model reported by the last agent response, for labels.
 export interface AgentInfo {

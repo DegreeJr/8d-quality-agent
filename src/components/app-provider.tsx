@@ -5,8 +5,9 @@ import { AppState, NCR, CAPA, EvidenceRecord } from '@/lib/types';
 import { createInitialState, sectionDraft } from '@/lib/data';
 import { acceptanceEvent, suggestionEvent, withClassification, type ClassificationFields, type ClassificationResponse } from '@/lib/classification';
 import { intakeEvents, type DocumentIntake, type PhotoReading } from '@/lib/intake';
+import { buildCorrectiveRequest, correctiveAuditAction, correctiveDraft, proposeCorrectiveActions, type CorrectiveResponse } from '@/lib/corrective-client';
 import { agentDraft, agentLabel, buildAgentRequest, formatDuration, proposeRootCause, sapContextAuditActions, type AgentResponse } from '@/lib/agent-client';
-import { reviewSection, canAccess, registerEvidence, registryOf, rootCauseCheck, rootCauseAuditAction, todayIso, withAgentDraft, withAgentFailure, withEscalations } from '@/lib/workflow';
+import { reviewSection, canAccess, registerEvidence, registryOf, rootCauseCheck, rootCauseAuditAction, todayIso, withActionDraft, withAgentDraft, withAgentFailure, withEscalations } from '@/lib/workflow';
 interface Store {
     state: AppState;
     ready: boolean;
@@ -87,6 +88,32 @@ export function AppProvider({ children }: {
     const event = (id: string, action: string, kind: 'AI' | 'Human' | 'System' = 'Human', actor?: string) => ({ id: crypto.randomUUID(), ncrId: id, actor: actor ? actor : kind === 'AI' ? 'Quality agent (simulated)' : kind === 'System' ? 'Root cause validator' : 'Sarah Chen', kind, action, timestamp: new Date().toISOString() });
     const validationEvents = (s: AppState, id: string, step: number, content: string, trigger: 'generated' | 'saved') => { if (step !== 3)
         return []; const check = rootCauseCheck(s, id, content); return check.ok ? [] : [event(id, rootCauseAuditAction(step, trigger, check.issues), 'System')]; };
+    // D5 from the agent: only reachable when D4 is approved (canAccess), and the request carries the D4 status.
+    const generateActionsWithAgent = async (n: NCR) => {
+        const report = state.reports.find(r => r.ncrId === n.id)!;
+        const start = performance.now();
+        let r: CorrectiveResponse;
+        try {
+            r = await proposeCorrectiveActions(buildCorrectiveRequest(n, report.sections[3], registryOf(state)));
+        }
+        catch (e) {
+            const message = (e as Error).message;
+            setState(s => withAgentFailure(s, event(n.id, 'Agent call failed after ' + formatDuration(performance.now() - start) + ': ' + message, 'System')));
+            setNotice('Agent unavailable: ' + message);
+            return false;
+        }
+        const ms = performance.now() - start;
+        const draft = correctiveDraft(r);
+        setState(s => {
+            const actor = 'Quality agent (' + agentLabel(r) + ')';
+            const events = [event(n.id, correctiveAuditAction(r, ms), 'AI', actor)];
+            if (r.rejected.length)
+                events.unshift(event(n.id, 'Action check withheld ' + r.rejected.length + ' proposed D5 ' + (r.rejected.length === 1 ? 'action' : 'actions') + ': ' + [...new Set(r.rejected.flatMap(a => a.issues.map(i => i.code)))].join(', ') + '.', 'System'));
+            return { ...withActionDraft(s, n.id, draft, r.retrieved.map(h => h.id)), agent: { mode: r.mode, model_id: r.model_id, model_name: r.model_name ?? null }, audit: [...events, ...s.audit] };
+        });
+        setNotice('Agent D5 proposal ready (' + agentLabel(r) + '). Review and validate before approval.');
+        return true;
+    };
     const store: Store = { state, ready, notice, notify: setNotice,
         addNcr: (n, extras) => { const classification = extras?.classification; const id = 'NCR-2026-' + String(Math.max(104, ...state.ncrs.map(x => Number(x.id.split('-').at(-1)))) + 1).padStart(3, '0'); setState(s => ({ ...s, ncrs: [{ ...n, id, date: new Date().toISOString().slice(0, 10), evidence: [], status: 'Open' }, ...s.ncrs], reports: [...s.reports, { ncrId: id, sections: Array.from({ length: 8 }, () => ({ content: '', status: 'Not started' })) }], audit: [...intakeEvents(id, extras?.intake ?? {}, 'Sarah Chen', new Date().toISOString()), ...(classification ? [acceptanceEvent(id, classification.response, classification.chosen, 'Sarah Chen', new Date().toISOString()), suggestionEvent(id, classification.response, new Date().toISOString())] : []), event(id, 'Created NCR' + ([n.document, n.photo].some(Boolean) ? ' with attachments: ' + [n.document, n.photo].filter(Boolean).join(', ') + '.' : '.')), ...s.audit] })); setNotice(id + ' created. Ready for an 8D investigation.'); return id; },
         recordClassificationSuggestion: (id, r) => setState(s => ({ ...s, audit: [suggestionEvent(id, r, new Date().toISOString()), ...s.audit] })),
@@ -96,8 +123,10 @@ export function AppProvider({ children }: {
             return s; const n = s.ncrs.find(n => n.id === id)!; const draft = sectionDraft(n, step); return { ...s, reports: s.reports.map(r => r.ncrId !== id ? r : { ...r, ...(step === 3 ? { agentRetrieved: undefined } : {}), sections: r.sections.map((x, i) => i === step ? { content: draft, status: 'Draft' } : i > step ? { ...x, status: x.content ? 'Draft' : 'Not started', feedback: undefined } : x) }), audit: [...validationEvents(s, id, step, draft, 'generated'), event(id, 'Generated simulated D' + (step + 1) + ' suggestion. ' + (n.evidence.length ? 'Historical references retrieved; current cause unvalidated.' : 'Evidence missing.'), 'AI'), ...s.audit] }; }),
         generateWithAgent: async (id, step) => {
             const n = state.ncrs.find(n => n.id === id);
-            if (!n || step !== 3 || !canAccess(state, id, step))
+            if (!n || (step !== 3 && step !== 4) || !canAccess(state, id, step))
                 return false;
+            if (step === 4)
+                return generateActionsWithAgent(n);
             const result = await requestAgentProposal(n, registryOf(state));
             if (!result.ok) {
                 setState(s => withAgentFailure(s, event(id, 'Agent call failed after ' + formatDuration(result.ms) + ': ' + result.error, 'System')));
