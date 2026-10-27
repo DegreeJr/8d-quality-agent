@@ -115,3 +115,17 @@ test('the workflow monitor escalates each overdue CAPA once, as a rule-based Sys
     assert.deepEqual(later.audit.filter(a => a.actor === ESCALATION_ACTOR).map(a => a.action.split(' ')[2]).sort(), ['CAPA-039', 'CAPA-040', 'CAPA-041', 'CAPA-042'], 'only CAPA-041 and CAPA-039 are new; CAPA-038 is completed');
     assert.equal(later.audit.filter(a => a.actor === ESCALATION_ACTOR).length, 4);
 });
+test('Request revision on D5 after D4 approval returns D5 and keeps D4 approved', () => {
+    const s = reviewSection(createInitialState(), 'NCR-2026-104', 3, true, 'TR-104: current-lot controlled trial reviewed.');
+    s.reports[0].sections[4] = { content: 'Corrective plan', status: 'Draft' };
+    s.reports[0].sections[5] = { content: 'Pilot results', status: 'Complete' };
+    assert.throws(() => reviewSection(s, 'NCR-2026-104', 4, false, ' '), /rejection reason/);
+    const after = reviewSection(s, 'NCR-2026-104', 4, false, 'Acceptance criteria missing for the pilot lot.');
+    const sections = after.reports[0].sections;
+    assert.deepEqual(sections[4], { content: 'Corrective plan', status: 'Rejected', feedback: 'Acceptance criteria missing for the pilot lot.' });
+    assert.equal(sections[3].status, 'Approved');
+    assert.equal(sections[5].status, 'Draft', 'later disciplines need review again');
+    assert.equal(canAccess(after, 'NCR-2026-104', 4), true, 'D5 stays editable');
+    assert.equal(canAccess(after, 'NCR-2026-104', 5), false, 'D6 locks until D5 is approved');
+    assert.equal(after.ncrs[0].status, 'In progress');
+});

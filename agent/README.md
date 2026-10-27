@@ -34,6 +34,9 @@ $env:NEXT_PUBLIC_AGENT_BACKEND='local'; $env:AGENT_URL='http://127.0.0.1:8080'; 
 | `SAP_MODEL_NAME` | none | Optional label and request `model` field, e.g. `gpt-5.4`. `anthropic--*` is refused for now. |
 | `SAP_RESOURCE_GROUP` | `default` | Sent as the `AI-Resource-Group` header. |
 | `SAP_API_VERSION` | `2024-12-01-preview` | `api-version` query parameter. |
+| `SAP_HUB_API_KEY_FILE` | none | Optional. Path to a text file outside the repo containing only the SAP Business Accelerator Hub API key. Read at call time, sent as the `APIKey` header. |
+| `SAP_HUB_BASE_URL` | none | Optional. SAP Business Accelerator Hub sandbox host. |
+| `SAP_HUB_SERVICE_PATH` | none | Optional. Path of the QM service on the sandbox (not chosen yet). |
 
 Credentials: the bedrock mode uses the default AWS credential chain through boto3. The sap mode reads `clientid`, `clientsecret`, `url` and `serviceurls.AI_API_URL` from the key file when the first model is created, gets a client-credentials token from `<url>/oauth/token`, and keeps it in memory. Key values and tokens are never logged, printed or put in error messages; errors from the model provider are reported by exception type only. Tests block AWS client creation and API calls, and SAP tests use fake keys and mocked HTTP.
 
@@ -53,6 +56,23 @@ $env:SAP_MODEL_NAME = 'gpt-5.4'
 ```
 
 Rejection paths, same environment: `.\.venv\Scripts\python scripts\smoke_sap_rejections.py`. It runs (a) NCR-2026-100 without current-lot evidence and (b) an engineer note pushing "operator human error", prints each agent response unchanged followed by an `EXPECTATION MET` / `NOT MET` line, and exits 0 only if both are met.
+
+## SAP QM context (Business Accelerator Hub sandbox)
+
+Tool `get_sap_quality_context` (all modes; the mock engine calls it too) returns read-only SAP QM context labelled "SAP sandbox sample data (not current-lot evidence)", from `quality_agent/sap_hub.py`. With all three `SAP_HUB_*` variables set, it sends `GET <SAP_HUB_BASE_URL>/<SAP_HUB_SERVICE_PATH>?$top=5` with the `APIKey` header and keeps the scalar fields of up to five rows (`d.results` or `value`). Without the variables, or on a network, HTTP or parse error, it returns `fixtures/sap_quality_context.json` with source "cached sample" and the reason. That fixture is a PLACEHOLDER until the QM API and its spec are chosen. TODO(verify): service path, header and paging option for the chosen API.
+
+The result is never current-lot evidence: the tool records only its source in the response (`sap_context`), adds no NCR id to `retrieved` and nothing to the evidence registry, so it cannot unlock D4, and validator Rule F rejects a proposal that uses sandbox data as evidence or confirmation. The workspace timeline shows each call with its source.
+
+## Bedrock readiness check
+
+`scripts/check_bedrock.py` runs one D4 proposal with `AGENT_MODE=bedrock` through the default AWS credential chain and prints one line, `OUTCOME: ok | no_credentials | access_denied | model_not_enabled | other`, with the exception type and AWS error code on failure. It never reads, prints or passes credentials and never prints error messages. It calls AWS for real and is not part of any test suite (only its classifier is unit tested).
+
+```powershell
+cd agent
+$env:AGENT_MODEL_ID = '<Bedrock model id or inference profile id>'
+$env:AWS_REGION = 'us-west-2'
+.\.venv\Scripts\python scripts\check_bedrock.py
+```
 
 ## Adding a provider
 
