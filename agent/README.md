@@ -63,6 +63,10 @@ Tool `get_sap_quality_context` is called by the service once per D4 request in e
 
 The result is never current-lot evidence: the tool records only its source in the response (`sap_context`), adds no NCR id to `retrieved` and nothing to the evidence registry, so it cannot unlock D4, and validator Rule F rejects a proposal that uses sandbox data as evidence or confirmation. The workspace timeline shows each call with its source.
 
+## Defect classification (classify_ncr)
+
+`{"action": "classify_ncr", "ncr": {"id"?, "title", "description"}}` on `/invocations` (`quality_agent/classify.py`) retrieves the top 5 similar historical NCRs with the keyword retriever and votes category, defect code, severity and area, one vote per case. A tie for the top count or an empty retrieval leaves the field null ("unclassified, evidence missing"). No model is called, so every `AGENT_MODE` gives the same answer. The response carries `proposal`, `votes`, `retrieved`, `cited_ncr_ids` and `missing_data`; the UI shows it as an agent proposal that the engineer accepts or edits.
+
 ## Bedrock readiness check
 
 `scripts/check_bedrock.py` runs one D4 proposal with `AGENT_MODE=bedrock` through the default AWS credential chain and prints one line, `OUTCOME: ok | no_credentials | access_denied | model_not_enabled | other`, with the exception type and AWS error code on failure. It never reads, prints or passes credentials and never prints error messages. It calls AWS for real and is not part of any test suite (only its classifier is unit tested).

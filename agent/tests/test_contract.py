@@ -17,3 +17,16 @@ def test_mock_response_for_ncr_104_matches_contract_fixture(corpus):
     if os.environ.get("UPDATE_FIXTURES") == "1":
         FIXTURE.write_text(json.dumps(response, indent=2) + "\n", encoding="utf-8")
     assert response == json.loads(FIXTURE.read_text(encoding="utf-8"))
+
+
+CLASSIFY_FIXTURE = REPO / "tests" / "fixtures" / "classify-response-104.json"
+
+
+def test_classify_response_for_ncr_104_matches_contract_fixture(corpus):
+    from quality_agent.classify import classify_ncr
+
+    payload = {"action": "classify_ncr", "ncr": {"id": "NCR-2026-104", "title": NCR_104["title"], "description": NCR_104["description"]}}
+    response = classify_ncr(payload, corpus, corpus.keyword_retriever())
+    if os.environ.get("UPDATE_FIXTURES") == "1":
+        CLASSIFY_FIXTURE.write_text(json.dumps(response, indent=2) + "\n", encoding="utf-8")
+    assert response == json.loads(CLASSIFY_FIXTURE.read_text(encoding="utf-8"))

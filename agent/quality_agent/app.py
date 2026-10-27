@@ -11,6 +11,8 @@ from typing import Any
 
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
+from .classify import ACTION as CLASSIFY_ACTION
+from .classify import ClassifyRequestError, classify_ncr
 from .config import Settings
 from .corpus import Corpus
 from .engines import Engine, create_engine
@@ -37,8 +39,11 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     @app.entrypoint
     def invoke(payload: Any) -> dict[str, Any]:
         try:
+            # classify_ncr is a retrieval vote without a model; every other action goes to propose_root_cause.
+            if isinstance(payload, dict) and payload.get("action") == CLASSIFY_ACTION:
+                return classify_ncr(payload, corpus, retriever)
             return propose_root_cause(payload, engine, corpus, retriever, sap_hub)
-        except RequestError as e:
+        except (RequestError, ClassifyRequestError) as e:
             return {"status": "error", "error_type": "request", "error": str(e)}
         except (SapConfigError, SapAuthError) as e:
             # These messages are built without secrets or tokens.
