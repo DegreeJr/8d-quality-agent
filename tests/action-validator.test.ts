@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { actionsFromText, validateCorrectiveActions, type CorrectiveAction } from '../src/lib/action-validator';
+import { actionsFromText, validateContainmentActions, validateCorrectiveActions, type CorrectiveAction } from '../src/lib/action-validator';
 
 const fx = JSON.parse(readFileSync(join(process.cwd(), 'tests', 'fixtures', 'd5-action-cases.json'), 'utf8')) as {
     registries: Record<string, { id: string; ncrId: string }[]>;
@@ -16,6 +16,13 @@ for (const c of fx.cases)
         assert.equal(r.ok, c.expectedCodes.length === 0);
         if (c.expectedIndexes)
             assert.deepEqual(r.issues.map(i => i.index), c.expectedIndexes);
+    });
+
+const d3 = JSON.parse(readFileSync(join(process.cwd(), 'tests', 'fixtures', 'd3-containment-cases.json'), 'utf8')) as typeof fx;
+for (const c of d3.cases)
+    test('D3 shared case: ' + c.name, () => {
+        const r = validateContainmentActions(c.actions, c.retrieved, { currentNcrId: c.currentNcrId, evidenceRegistry: d3.registries[c.registry] });
+        assert.deepEqual(r.issues.map(i => i.code), c.expectedCodes);
     });
 
 test('D5 text lines become actions with the ids they mention', () => {

@@ -99,3 +99,39 @@ def validate_corrective_actions(actions: Sequence[dict], retrieved_ids: Sequence
         elif not (_words(text) & d4_words) and not any(i in d4_cited for i in cited):
             issues.append(ActionIssue(index, "ACTION_IGNORES_D4", label + " does not address the approved D4 root cause: it shares no term with it and cites no NCR the D4 cites."))
     return issues
+
+
+# D3: containment reused from retrieved cases. Generic containment is accepted only with a citation.
+_GENERIC_CONTAINMENT = [re.compile(p, _FLAGS) for p in (
+    r"\b(?:hold|quarantine|block)\s+(?:all\s+)?(?:the\s+)?(?:stock|parts|lots?|material|batch(?:es)?|products?)\b",
+    r"\b100\s*%\s+(?:inspection|check|sorting)\b",
+    r"\b(?:sort|segregate|screen)\s+(?:all\s+)?(?:the\s+)?(?:suspect\s+)?(?:parts|stock|lots?|products?)\b",
+    r"\binform\s+(?:the\s+)?customers?\b",
+    r"\b(?:karantina|tahan\s+(?:semua\s+)?(?:stok|lot|part)|sortir|inspeksi\s+100\s*%|informasikan\s+pelanggan)\b",
+)]
+
+
+def is_generic_containment(text: str) -> bool:
+    return any(r.search(text) for r in _GENERIC_CONTAINMENT)
+
+
+def validate_containment_actions(actions: Sequence[dict], retrieved_ids: Sequence[str], *, current_ncr_id: str,
+                                 evidence_registry: Sequence[EvidenceRef]) -> list[ActionIssue]:
+    """D3: each containment action cites a retrieved NCR whose containment it reuses, or registered current-lot evidence."""
+    retrieved = {i.upper() for i in retrieved_ids}
+    current = current_ncr_id.upper()
+    registered = {r.id.upper() for r in evidence_registry if r.ncr_id.upper() == current}
+    issues: list[ActionIssue] = []
+    for index, a in enumerate(actions):
+        text = a["action"]
+        cited = list(dict.fromkeys(i.upper() for i in [*a.get("cited_ncr_ids", []), *_ncr_ids_in(text)]))
+        evidence = [i for i in dict.fromkeys(e.upper() for e in [*a.get("evidence_ids", []), *evidence_ids_in(text)]) if i in registered]
+        label = "Containment " + str(index + 1)
+        for i in cited:
+            if i not in retrieved:
+                issues.append(ActionIssue(index, "CITATION_NOT_RETRIEVED", label + " cites " + i + ", which was not retrieved for this case."))
+        if not any(i in retrieved for i in cited) and not evidence:
+            issues.append(ActionIssue(index, "ACTION_UNCITED", label + " cites no retrieved NCR whose containment it reuses and no current-lot evidence id registered to " + current + "."))
+            if is_generic_containment(text):
+                issues.append(ActionIssue(index, "GENERIC_ACTION_UNSUPPORTED", label + " is generic containment (hold, sort, 100% inspection) without a citation. Cite the NCR whose containment it reuses."))
+    return issues

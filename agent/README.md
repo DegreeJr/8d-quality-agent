@@ -67,6 +67,10 @@ The result is never current-lot evidence: the tool records only its source in th
 
 `{"action": "classify_ncr", "ncr": {"id"?, "title", "description"}}` on `/invocations` (`quality_agent/classify.py`) retrieves the top 5 similar historical NCRs with the keyword retriever and votes category, defect code, severity and area, one vote per case. A tie for the top count or an empty retrieval leaves the field null ("unclassified, evidence missing"). No model is called, so every `AGENT_MODE` gives the same answer. The response carries `proposal`, `votes`, `retrieved`, `cited_ncr_ids` and `missing_data`; the UI shows it as an agent proposal that the engineer accepts or edits.
 
+## D2 and D3 drafts (draft_section)
+
+`{"action": "draft_section", "section": "D2" | "D3", "ncr", "current_evidence"}` (`quality_agent/sections.py`) is rule-based in every mode. D2 restates the NCR in 5W2H form from its fields and description and writes "Evidence missing." for anything the NCR does not hold. D3 reuses the containment of the 3 most similar historical NCRs, each action citing its NCR; `action_validator.validate_containment_actions` withholds uncited actions.
+
 ## D5 corrective actions (propose_corrective_actions)
 
 `{"action": "propose_corrective_actions", "d4_status": "Approved", "approved_d4", "ncr", "current_evidence"}` (`quality_agent/corrective.py`) is refused unless `d4_status` is "Approved". The service retrieves similar NCRs and fetches the NCRs the D4 cites; the mock engine reuses their corrective actions, the Strands engines return a structured `ActionPlan`. `quality_agent/action_validator.py` (shared cases in `../tests/fixtures/d5-action-cases.json`) withholds actions that cite nothing retrieved or registered, are generic without registered current-lot evidence, contradict the approved D4 or ignore it. The response has `actions`, `rejected` (with issues), `missing_data` and `retrieved`.

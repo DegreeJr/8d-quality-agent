@@ -88,6 +88,39 @@ export function validateCorrectiveActions(actions: readonly CorrectiveAction[], 
     return { ok: issues.length === 0, issues };
 }
 
+// D3: containment reused from retrieved cases. Generic containment is accepted only with a citation.
+const GENERIC_CONTAINMENT = [
+    /\b(?:hold|quarantine|block)\s+(?:all\s+)?(?:the\s+)?(?:stock|parts|lots?|material|batch(?:es)?|products?)\b/i,
+    /\b100\s*%\s+(?:inspection|check|sorting)\b/i,
+    /\b(?:sort|segregate|screen)\s+(?:all\s+)?(?:the\s+)?(?:suspect\s+)?(?:parts|stock|lots?|products?)\b/i,
+    /\binform\s+(?:the\s+)?customers?\b/i,
+    /\b(?:karantina|tahan\s+(?:semua\s+)?(?:stok|lot|part)|sortir|inspeksi\s+100\s*%|informasikan\s+pelanggan)\b/i,
+];
+
+export function isGenericContainment(text: string): boolean {
+    return GENERIC_CONTAINMENT.some(r => r.test(text));
+}
+
+export function validateContainmentActions(actions: readonly CorrectiveAction[], retrievedIds: readonly string[], options: { currentNcrId: string; evidenceRegistry: readonly Pick<EvidenceRecord, 'id' | 'ncrId'>[] }): ActionCheck {
+    const retrieved = new Set(retrievedIds.map(id => id.toUpperCase()));
+    const current = options.currentNcrId.toUpperCase();
+    const registered = new Set(options.evidenceRegistry.filter(r => r.ncrId.toUpperCase() === current).map(r => r.id.toUpperCase()));
+    const issues: ActionIssue[] = [];
+    actions.forEach((a, index) => {
+        const cited = [...new Set([...a.cited_ncr_ids, ...ncrIdsIn(a.action)].map(id => id.toUpperCase()))];
+        const evidence = [...new Set([...a.evidence_ids, ...evidenceIdsIn(a.action)].map(id => id.toUpperCase()))].filter(id => registered.has(id));
+        const label = 'Containment ' + (index + 1);
+        for (const id of cited.filter(id => !retrieved.has(id)))
+            issues.push({ index, code: 'CITATION_NOT_RETRIEVED', message: label + ' cites ' + id + ', which was not retrieved for this case.' });
+        if (!cited.some(id => retrieved.has(id)) && !evidence.length) {
+            issues.push({ index, code: 'ACTION_UNCITED', message: label + ' cites no retrieved NCR whose containment it reuses and no current-lot evidence id registered to ' + current + '.' });
+            if (isGenericContainment(a.action))
+                issues.push({ index, code: 'GENERIC_ACTION_UNSUPPORTED', message: label + ' is generic containment (hold, sort, 100% inspection) without a citation. Cite the NCR whose containment it reuses.' });
+        }
+    });
+    return { ok: issues.length === 0, issues };
+}
+
 // The D5 text as actions: one per line that starts with "-", "*" or a number. Ids are read from the line.
 export function actionsFromText(text: string): CorrectiveAction[] {
     return text.split('\n').map(l => l.trim()).filter(l => /^(?:[-*•]|\d+[.)])\s+/.test(l)).map(l => {

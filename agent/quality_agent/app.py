@@ -14,6 +14,8 @@ from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from .classify import ACTION as CLASSIFY_ACTION
 from .classify import ClassifyRequestError, classify_ncr
 from .config import Settings
+from .sections import ACTION as SECTION_ACTION
+from .sections import draft_section
 from .corrective import ACTION as CORRECTIVE_ACTION
 from .corrective import propose_corrective_actions
 from .intake import EXTRACT_ACTION, PHOTO_ACTION, IntakeRequestError, PhotoUnavailable, VisionClient, describe_photo, extract_ncr_intake
@@ -50,6 +52,8 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None, v
             action = payload.get("action") if isinstance(payload, dict) else None
             if action == CLASSIFY_ACTION:
                 return classify_ncr(payload, corpus, retriever)
+            if action == SECTION_ACTION:
+                return draft_section(payload, corpus, retriever)
             if action == CORRECTIVE_ACTION:
                 return propose_corrective_actions(payload, engine, corpus, retriever)
             if action == EXTRACT_ACTION:
