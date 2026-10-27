@@ -98,6 +98,8 @@ export interface AppState {
     reports: Report[];
     capas: CAPA[];
     audit: AuditEvent[];
+    // Current-lot evidence registered by an engineer in the UI. Only registerEvidence adds to it, never an agent response.
+    evidence?: EvidenceRecord[];
     // Last agent response's mode and model (local backend only).
     agent?: AgentInfo;
 }

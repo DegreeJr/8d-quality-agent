@@ -1,10 +1,10 @@
 'use client';
 /* eslint-disable react-hooks/set-state-in-effect -- Hydrate browser-only storage and URL parameters after mount. */
 import { createContext, useContext, useEffect, useState } from 'react';
-import { AppState, NCR, CAPA } from '@/lib/types';
-import { createInitialState, evidenceRegistry, sectionDraft } from '@/lib/data';
+import { AppState, NCR, CAPA, EvidenceRecord } from '@/lib/types';
+import { createInitialState, sectionDraft } from '@/lib/data';
 import { agentDraft, agentLabel, buildAgentRequest, proposeRootCause, type AgentResponse } from '@/lib/agent-client';
-import { reviewSection, canAccess, rootCauseCheck, rootCauseAuditAction, withAgentDraft, withAgentFailure } from '@/lib/workflow';
+import { reviewSection, canAccess, registerEvidence, registryOf, rootCauseCheck, rootCauseAuditAction, withAgentDraft, withAgentFailure } from '@/lib/workflow';
 interface Store {
     state: AppState;
     ready: boolean;
@@ -15,15 +15,17 @@ interface Store {
     generateWithAgent: (id: string, step: number) => Promise<boolean>;
     review: (id: string, step: number, approve: boolean, note: string) => void;
     logSystem: (id: string, action: string) => void;
+    // Returns an error message, or null when the evidence was registered.
+    registerEvidence: (id: string, input: { id: string; kind: string; summary: string }) => string | null;
     updateCapa: (id: string, status: CAPA['status']) => void;
     assignCapa: (c: Omit<CAPA, 'id' | 'escalated'>) => void;
     notify: (s: string) => void;
     reset: () => void;
 }
 // Agent helpers live outside the component so the React Compiler can still analyze it.
-async function requestAgentProposal(n: NCR): Promise<{ ok: true; response: AgentResponse } | { ok: false; error: string }> {
+async function requestAgentProposal(n: NCR, registry: EvidenceRecord[]): Promise<{ ok: true; response: AgentResponse } | { ok: false; error: string }> {
     try {
-        return { ok: true, response: await proposeRootCause(buildAgentRequest(n, evidenceRegistry)) };
+        return { ok: true, response: await proposeRootCause(buildAgentRequest(n, registry)) };
     }
     catch (e) {
         return { ok: false, error: (e as Error).message };
@@ -45,7 +47,7 @@ export function AppProvider({ children }: {
             const raw = localStorage.getItem(key);
             if (raw) {
                 const saved = JSON.parse(raw);
-                if (saved.version === 1 && Array.isArray(saved.ncrs) && Array.isArray(saved.reports) && Array.isArray(saved.capas) && Array.isArray(saved.audit))
+                if (saved.version === 1 && Array.isArray(saved.ncrs) && Array.isArray(saved.reports) && Array.isArray(saved.capas) && Array.isArray(saved.audit) && (saved.evidence === undefined || Array.isArray(saved.evidence)))
                     setState(saved);
             }
         }
@@ -79,7 +81,7 @@ export function AppProvider({ children }: {
             const n = state.ncrs.find(n => n.id === id);
             if (!n || step !== 3 || !canAccess(state, id, step))
                 return false;
-            const result = await requestAgentProposal(n);
+            const result = await requestAgentProposal(n, registryOf(state));
             if (!result.ok) {
                 setState(s => withAgentFailure(s, event(id, 'Agent call failed: ' + result.error, 'System')));
                 setNotice('Agent unavailable: ' + result.error);
@@ -98,6 +100,12 @@ export function AppProvider({ children }: {
             return true;
         },
         review: (id, step, approve, note) => { setState(s => ({ ...reviewSection(s, id, step, approve, note), audit: [event(id, (approve ? 'Approved' : 'Rejected') + ' D' + (step + 1) + (note ? ': ' + note : '')), ...s.audit] })); setNotice(approve ? 'Human review recorded. Next discipline unlocked.' : 'Draft returned for revision.'); },
+        registerEvidence: (id, input) => { let next: AppState; try {
+            next = registerEvidence(state, id, input, 'Sarah Chen', new Date().toISOString());
+        }
+        catch (e) {
+            return (e as Error).message;
+        } setState(next); setNotice(input.id.trim().toUpperCase() + ' registered as current-lot evidence for ' + id + '.'); return null; },
         logSystem: (id, action) => setState(s => ({ ...s, audit: [event(id, action, 'System'), ...s.audit] })),
         updateCapa: (id, status) => { setState(s => { const c = s.capas.find(c => c.id === id)!; return { ...s, capas: s.capas.map(c => c.id === id ? { ...c, status } : c), audit: [event(c.ncrId, id + ' status changed to ' + status), ...s.audit] }; }); setNotice('CAPA status updated.'); },
         assignCapa: c => { const id = 'CAPA-' + String(Math.max(42, ...state.capas.map(c => Number(c.id.split('-')[1]))) + 1).padStart(3, '0'); setState(s => ({ ...s, capas: [{ ...c, id, escalated: false }, ...s.capas], audit: [event(c.ncrId, 'Assigned ' + id + ' to ' + c.owner), ...s.audit] })); setNotice('Corrective action assigned.'); },

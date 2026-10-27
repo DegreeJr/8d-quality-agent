@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createInitialState, sectionDraft } from '../src/lib/data';
-import { approvalsResetBy, canAccess, reviewSection, withAgentDraft, withAgentFailure } from '../src/lib/workflow';
-import type { AgentResponse } from '../src/lib/agent-client';
+import { approvalsResetBy, canAccess, evidenceFor, isD4Locked, registerEvidence, registryOf, reviewSection, RootCauseRejectedError, rootCauseCheck, withAgentDraft, withAgentFailure } from '../src/lib/workflow';
+import { buildAgentRequest, type AgentResponse } from '../src/lib/agent-client';
 import type { AuditEvent } from '../src/lib/types';
 test('D4 blocks D5 and D6 until a human approves', () => { const s = createInitialState(); assert.equal(canAccess(s, 'NCR-2026-104', 3), true); assert.equal(canAccess(s, 'NCR-2026-104', 4), false); assert.throws(() => reviewSection(s, 'NCR-2026-104', 3, true, ''), /validation evidence/); const reviewed = reviewSection(s, 'NCR-2026-104', 3, true, 'TR-104: current-lot controlled trial reviewed.'); assert.equal(canAccess(reviewed, 'NCR-2026-104', 4), true); assert.equal(canAccess(reviewed, 'NCR-2026-104', 5), false); });
 test('D5 also requires approval and validation notes', () => { let s = reviewSection(createInitialState(), 'NCR-2026-104', 3, true, 'D4 trial reviewed'); s.reports[0].sections[4] = { content: 'Validated corrective action plan', status: 'Draft' }; assert.throws(() => reviewSection(s, 'NCR-2026-104', 4, true, '')); s = reviewSection(s, 'NCR-2026-104', 4, true, 'Pilot plan and acceptance criteria reviewed'); assert.equal(canAccess(s, 'NCR-2026-104', 5), true); });
@@ -34,4 +34,65 @@ test('a successful agent proposal replaces D4 and revokes later approvals', () =
     assert.deepEqual(after.reports[0].sections[3], { content: 'Agent draft', status: 'Draft' });
     assert.equal(after.reports[0].sections[4].status, 'Draft');
     assert.deepEqual(after.reports[0].agentRetrieved, r.retrieved);
+});
+const NOW = '2026-10-28T09:00:00.000Z';
+const TR_100 = { id: 'TR-100', kind: 'Trial report', summary: 'Controlled spray trial on LOT-CT-1001.' };
+function withD4(s: ReturnType<typeof createInitialState>, id: string, content: string) {
+    return { ...s, reports: s.reports.map(r => r.ncrId !== id ? r : { ...r, sections: r.sections.map((x, i) => i === 3 ? { content, status: 'Draft' as const } : x) }) };
+}
+test('an engineer registers TR-100 on NCR-2026-100, cites it in D4 and can then approve', () => {
+    let s = createInitialState();
+    assert.equal(isD4Locked(s, 'NCR-2026-100'), true);
+    s = registerEvidence(s, 'NCR-2026-100', TR_100, 'Sarah Chen', NOW);
+    assert.equal(isD4Locked(s, 'NCR-2026-100'), false, 'Rule D sees the registered record');
+    assert.deepEqual(evidenceFor(s, 'NCR-2026-100').map(r => r.id), ['TR-100']);
+    assert.equal(rootCauseCheck(s, 'NCR-2026-100', '').hypothesisStatus, 'evidence_registered');
+    // Nothing was retrieved for NCR-2026-100, so Rule C still applies: a bare root cause is rejected at approval.
+    assert.throws(() => reviewSection(withD4(s, 'NCR-2026-100', 'Root cause is low spray pressure.'), 'NCR-2026-100', 3, true, 'TR-100 reviewed'), RootCauseRejectedError);
+    const draft = 'Hypothesis: low spray pressure, supported by current-lot trial TR-100. Historical evidence missing: no precedent was retrieved.';
+    const approved = reviewSection(withD4(s, 'NCR-2026-100', draft), 'NCR-2026-100', 3, true, 'TR-100: controlled spray trial reviewed.');
+    assert.equal(approved.reports.find(r => r.ncrId === 'NCR-2026-100')!.sections[3].status, 'Approved');
+});
+test('after agent retrieval, a root cause that cites neither a retrieved NCR nor TR-100 is still rejected', () => {
+    let s = registerEvidence(createInitialState(), 'NCR-2026-100', TR_100, 'Sarah Chen', NOW);
+    s = withAgentDraft(s, 'NCR-2026-100', 3, 'Agent draft', { retrieved: [{ id: 'NCR-2024-063', score: 1, title: 'Thin coating' }] } as AgentResponse);
+    assert.throws(() => reviewSection(withD4(s, 'NCR-2026-100', 'Root cause is low spray pressure.'), 'NCR-2026-100', 3, true, 'reviewed'), (e: unknown) => e instanceof RootCauseRejectedError && e.issues.some(i => i.code === 'ROOT_CAUSE_UNCITED'));
+    assert.doesNotThrow(() => reviewSection(withD4(s, 'NCR-2026-100', 'Root cause is low spray pressure, confirmed by trial TR-100.'), 'NCR-2026-100', 3, true, 'TR-100 reviewed'));
+});
+test('evidence registration is a Human audit event with the id and type', () => {
+    const s = registerEvidence(createInitialState(), 'NCR-2026-100', TR_100, 'Sarah Chen', NOW);
+    assert.deepEqual({ kind: s.audit[0].kind, actor: s.audit[0].actor, ncrId: s.audit[0].ncrId, action: s.audit[0].action }, { kind: 'Human', actor: 'Sarah Chen', ncrId: 'NCR-2026-100', action: 'Registered current-lot evidence TR-100 (Trial report).' });
+    assert.deepEqual(s.evidence, [{ id: 'TR-100', ncrId: 'NCR-2026-100', kind: 'Trial report', summary: TR_100.summary, date: '2026-10-28' }]);
+});
+test('evidence registration rejects missing, malformed, unrecognised and duplicate ids', () => {
+    const s = registerEvidence(createInitialState(), 'NCR-2026-100', TR_100, 'Sarah Chen', NOW);
+    const attempt = (id: string, extra: Partial<typeof TR_100> = {}) => () => registerEvidence(s, 'NCR-2026-100', { ...TR_100, id, ...extra }, 'Sarah Chen', NOW);
+    assert.throws(attempt('  '), /Enter an evidence id/);
+    assert.throws(attempt('TR 100'), /letters, digits and hyphens/);
+    assert.throws(attempt('TR_100'), /letters, digits and hyphens/);
+    assert.throws(attempt('XX-100'), /recognises/);
+    assert.throws(attempt('TR-10'), /recognises/);
+    assert.throws(attempt('TR-100'), /already registered for NCR-2026-100/);
+    assert.throws(attempt('tr-100'), /already registered for NCR-2026-100/, 'ids are compared in upper case');
+    assert.throws(attempt('TR-104'), /already registered to NCR-2026-104/);
+    assert.throws(attempt('PL-100', { kind: 'Rumour' }), /evidence type/);
+    assert.throws(attempt('PL-100', { summary: ' ' }), /short description/);
+    assert.equal(registerEvidence(s, 'NCR-2026-100', { ...TR_100, id: 'pl-100', kind: 'Parameter log' }, 'Sarah Chen', NOW).evidence!.at(-1)!.id, 'PL-100');
+});
+test('an agent response never adds current-lot evidence or unlocks D4', () => {
+    const s = createInitialState();
+    // A response carrying evidence-like fields: only the retrieved list is taken from it.
+    const r = { retrieved: [{ id: 'NCR-2024-063', score: 1, title: 'Thin coating' }], current_evidence: [{ id: 'TR-100', ncrId: 'NCR-2026-100' }], evidence: [{ id: 'TR-100', ncrId: 'NCR-2026-100', kind: 'Trial report', summary: 'x', date: '2026-10-28' }], proposal: { root_cause: 'Confirmed by TR-100', cited_ncr_ids: [], confidence: 'high', missing_data: [] } } as unknown as AgentResponse;
+    const after = withAgentDraft(s, 'NCR-2026-100', 3, 'Root cause confirmed by TR-100.', r);
+    assert.deepEqual(after.evidence, []);
+    assert.equal(isD4Locked(after, 'NCR-2026-100'), true);
+    assert.equal(rootCauseCheck(after, 'NCR-2026-100', 'Root cause confirmed by TR-100.').ok, false, 'TR-100 is not in the registry');
+    assert.deepEqual(withAgentFailure(s, { id: 'e', ncrId: 'NCR-2026-100', actor: 'Root cause validator', kind: 'System', action: 'Agent call failed', timestamp: NOW }).evidence, []);
+});
+test('the agent request carries evidence registered in the UI; a reset starts without it', () => {
+    const s = registerEvidence(createInitialState(), 'NCR-2026-100', TR_100, 'Sarah Chen', NOW);
+    assert.deepEqual(buildAgentRequest(s.ncrs.find(n => n.id === 'NCR-2026-100')!, registryOf(s)).current_evidence, [{ id: 'TR-100', ncrId: 'NCR-2026-100' }]);
+    const fresh = createInitialState();
+    assert.deepEqual(fresh.evidence, []);
+    assert.equal(isD4Locked(fresh, 'NCR-2026-100'), true);
 });

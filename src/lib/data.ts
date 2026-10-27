@@ -54,5 +54,5 @@ export function createInitialState(): AppState {
             { id: 'a4', ncrId: 'NCR-2026-104', actor: 'Sarah Chen', kind: 'Human', action: 'Created NCR and assigned the investigation team.', timestamp: '2026-10-13T08:15:00Z' },
             { id: 'a5', ncrId: 'NCR-2026-101', actor: 'Workflow monitor', kind: 'System', action: 'Escalated overdue CAPA-040 to the quality lead.', timestamp: '2026-10-12T09:00:00Z' },
             { id: 'a6', ncrId: 'NCR-2026-103', actor: 'James Wilson', kind: 'Human', action: 'Assigned CAPA-041 for tool-life monitoring.', timestamp: '2026-10-11T10:00:00Z' }
-        ] };
+        ], evidence: [] };
 }
