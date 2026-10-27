@@ -62,6 +62,7 @@ Last verified: 2026-10-28 (automated checks below; earlier entries keep their ow
   - Step 24: the D4 Approve dialog warning was confirmed manually in the browser.
   - Not covered by this retest: steps 18 to 20, the yellow banner text of step 22b after Generate, and the `Root cause is likely ...` pass case of step 22b.
 - `npm run dev` listens on 127.0.0.1 only (2026-10-23, Next.js 16.4.1): the log shows "Local: http://127.0.0.1:3000", `netstat` shows `127.0.0.1:3000 LISTENING`, http://127.0.0.1:3000/workspace returned HTTP 200 and the machine's LAN address could not connect. `start-demo.bat` waits for and opens http://127.0.0.1:3000/workspace; the agent binds 127.0.0.1 by default outside Docker (bedrock-agentcore `run`). `npm start` (`next start`) was not changed and still uses Next.js's default host.
+- Phase list of 2026-10-28, Phase 0, labels (unit tested, not yet tested in a browser): the Audit Trail badge, the dashboard Agent activity card and the workspace timeline derive the label from the actor (`eventBadge`, `isSimulatedActor` in `src/lib/workflow.ts`). AI events whose actor ends in "(simulated)" show "Simulated AI"; AI events from the local or SAP agent show "Agent"; Human and System events keep their kind. Explainer texts updated. `npm test` 152/152, `pytest` 176 passed, typecheck, lint and build clean.
 - Manual browser test of 3da5df6 (2026-10-28, run by the reviewer in Chrome, `AGENT_MODE=sap`, agent restarted; result reported to the agent, not observed by the agent). Steps 26 to 33 passed except the part noted under step 33:
   - Step 30: the SAP context timeline entry appears on every Generate on NCR-2026-104. Before the agent restart it did not appear (old agent process).
   - Step 32: the D4 banner text on NCR-2026-100 after registering TR-100 matches the checklist.
@@ -143,6 +144,7 @@ Changes of 2026-10-28
 32. Reset the demo, open NCR-2026-100 D4 and register `TR-100`: the yellow banner reads "No historical precedent was retrieved for this case. Current-lot evidence registered for NCR-2026-100: TR-100. Validate any hypothesis against it before approval."
 33. With the local agent, Generate on NCR-2026-104 D4: the Agent timeline entry reads "Generated D4 proposal in N.N s; tools retrieved ...". Note the value; it is the browser round trip, not model time alone. Stop the agent and Generate again: the System entry reads "Agent call failed after N.N s: ...".
 34. Reset the demo, open NCR-2026-100 D4 and register `TR-100`: the Historical evidence card reads "No historical precedent was retrieved. Current-lot evidence registered for NCR-2026-100: TR-100." and no longer says "Evidence missing".
+35. Reset the demo, open Audit Trail: every seeded AI event (for example "Analysis agent (simulated)") shows the badge "Simulated AI", and the explainer says agent proposals are badged Agent. With the local agent, Generate on NCR-2026-104 D4, then open Audit Trail and the dashboard: the new event by "Quality agent (...)" shows "Agent", not "Simulated AI" or "Simulation"; the seeded events still say "Simulated AI".
 
 ## Raw output: SAP rejection smoke test, 2026-10-21 (verbatim, as pasted by the team)
 

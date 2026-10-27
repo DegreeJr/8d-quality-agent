@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createInitialState, sectionDraft } from '../src/lib/data';
-import { approvalsResetBy, canAccess, d4EvidenceBanner, ESCALATION_ACTOR, evidenceFor, isD4Locked, isOverdue, noHistoricalEvidenceText, registerEvidence, registryOf, reviewSection, RootCauseRejectedError, rootCauseCheck, withAgentDraft, withAgentFailure, withEscalations } from '../src/lib/workflow';
+import { approvalsResetBy, canAccess, d4EvidenceBanner, ESCALATION_ACTOR, eventBadge, evidenceFor, isD4Locked, isOverdue, noHistoricalEvidenceText, registerEvidence, registryOf, reviewSection, RootCauseRejectedError, rootCauseCheck, withAgentDraft, withAgentFailure, withEscalations } from '../src/lib/workflow';
 import { buildAgentRequest, type AgentResponse } from '../src/lib/agent-client';
 import type { AuditEvent } from '../src/lib/types';
 test('D4 blocks D5 and D6 until a human approves', () => { const s = createInitialState(); assert.equal(canAccess(s, 'NCR-2026-104', 3), true); assert.equal(canAccess(s, 'NCR-2026-104', 4), false); assert.throws(() => reviewSection(s, 'NCR-2026-104', 3, true, ''), /validation evidence/); const reviewed = reviewSection(s, 'NCR-2026-104', 3, true, 'TR-104: current-lot controlled trial reviewed.'); assert.equal(canAccess(reviewed, 'NCR-2026-104', 4), true); assert.equal(canAccess(reviewed, 'NCR-2026-104', 5), false); });
@@ -142,4 +142,15 @@ test('the Historical evidence card matches the D4 banner when only current-lot e
     assert.equal(noHistoricalEvidenceText('NCR-2026-100', ['TR-100'], true), 'No historical precedent was retrieved by the agent tools. Current-lot evidence registered for NCR-2026-100: TR-100.');
     assert.equal(noHistoricalEvidenceText('NCR-2026-100', [], false), 'Evidence missing. Gather current-lot records before validating a hypothesis.');
     assert.equal(noHistoricalEvidenceText('NCR-2026-100', [], true), 'Evidence missing. The agent retrieved no historical NCR.');
+});
+
+test('audit badges come from the actor: simulated actors stay Simulated AI, agent events show Agent', () => {
+    const s = createInitialState();
+    for (const a of s.audit.filter(a => a.kind === 'AI'))
+        assert.equal(eventBadge(a), 'Simulated AI', a.actor + ' is a seeded simulated actor');
+    assert.equal(eventBadge({ kind: 'AI', actor: 'Quality agent (simulated)' }), 'Simulated AI');
+    assert.equal(eventBadge({ kind: 'AI', actor: 'Quality agent (SAP AI Core (gpt-5.4))' }), 'Agent');
+    assert.equal(eventBadge({ kind: 'AI', actor: 'Quality agent (local agent, mock mode without a model)' }), 'Agent');
+    assert.equal(eventBadge({ kind: 'System', actor: ESCALATION_ACTOR }), 'System');
+    assert.equal(eventBadge({ kind: 'Human', actor: 'Sarah Chen' }), 'Human');
 });
