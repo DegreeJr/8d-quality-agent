@@ -1,4 +1,4 @@
-import { AppState, AuditEvent, EvidenceRecord, ReportSection } from './types';
+import { AppState, AuditEvent, CAPA, EvidenceRecord, ReportSection } from './types';
 import type { AgentResponse } from './agent-client';
 import { EVIDENCE_PREFIXES, evidenceIdsIn, validateRootCause, ValidationIssue, ValidationResult } from './validator';
 import { evidenceRegistry } from './data';
@@ -81,7 +81,21 @@ export function withAgentDraft(s: AppState, id: string, step: number, draft: str
 export function withAgentFailure(s: AppState, failure: AuditEvent): AppState {
     return { ...s, audit: [failure, ...s.audit] };
 }
-export function isOverdue(due: string, status: string) { return status !== 'Completed' && due < new Date().toISOString().slice(0, 10); }
+// CAPA escalation is a fixed rule, not AI: a CAPA is overdue when its due date is before `today` (YYYY-MM-DD)
+// and it is not completed.
+export const ESCALATION_ACTOR = 'Workflow monitor (rule-based)';
+export function isOverdue(c: Pick<CAPA, 'due' | 'status'>, today: string) { return c.status !== 'Completed' && c.due < today; }
+// The local calendar date as YYYY-MM-DD.
+export function todayIso(now: Date = new Date()) { return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
+// One System event per overdue CAPA that was not escalated before. Returns the same state when there is nothing new.
+export function withEscalations(state: AppState, today: string, now: string): AppState {
+    const done = new Set(state.escalated ?? []);
+    const due = state.capas.filter(c => isOverdue(c, today) && !done.has(c.id));
+    if (!due.length)
+        return state;
+    const events: AuditEvent[] = due.map(c => ({ id: 'esc-' + c.id, ncrId: c.ncrId, actor: ESCALATION_ACTOR, kind: 'System', action: 'Rule-based escalation: ' + c.id + ' is overdue (due ' + c.due + ', status ' + c.status + '); escalated to the quality lead.', timestamp: now }));
+    return { ...state, escalated: [...done, ...due.map(c => c.id)], audit: [...events, ...state.audit] };
+}
 export function reviewSection(state: AppState, id: string, step: number, approve: boolean, feedback: string): AppState { if (!canAccess(state, id, step))
     throw new Error('Complete the preceding disciplines first.'); if ((step === 3 || step === 4) && !feedback.trim())
     throw new Error('Record validation evidence or a rejection reason.'); const report = state.reports.find(r => r.ncrId === id); if (!report?.sections[step].content.trim())

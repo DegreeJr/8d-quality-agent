@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createInitialState, sectionDraft } from '../src/lib/data';
-import { approvalsResetBy, canAccess, evidenceFor, isD4Locked, registerEvidence, registryOf, reviewSection, RootCauseRejectedError, rootCauseCheck, withAgentDraft, withAgentFailure } from '../src/lib/workflow';
+import { approvalsResetBy, canAccess, ESCALATION_ACTOR, evidenceFor, isD4Locked, isOverdue, registerEvidence, registryOf, reviewSection, RootCauseRejectedError, rootCauseCheck, withAgentDraft, withAgentFailure, withEscalations } from '../src/lib/workflow';
 import { buildAgentRequest, type AgentResponse } from '../src/lib/agent-client';
 import type { AuditEvent } from '../src/lib/types';
 test('D4 blocks D5 and D6 until a human approves', () => { const s = createInitialState(); assert.equal(canAccess(s, 'NCR-2026-104', 3), true); assert.equal(canAccess(s, 'NCR-2026-104', 4), false); assert.throws(() => reviewSection(s, 'NCR-2026-104', 3, true, ''), /validation evidence/); const reviewed = reviewSection(s, 'NCR-2026-104', 3, true, 'TR-104: current-lot controlled trial reviewed.'); assert.equal(canAccess(reviewed, 'NCR-2026-104', 4), true); assert.equal(canAccess(reviewed, 'NCR-2026-104', 5), false); });
@@ -95,4 +95,23 @@ test('the agent request carries evidence registered in the UI; a reset starts wi
     const fresh = createInitialState();
     assert.deepEqual(fresh.evidence, []);
     assert.equal(isD4Locked(fresh, 'NCR-2026-100'), true);
+});
+test('a CAPA is overdue only when its due date is before today and it is not completed', () => {
+    assert.equal(isOverdue({ due: '2026-10-27', status: 'In progress' }, '2026-10-28'), true);
+    assert.equal(isOverdue({ due: '2026-10-28', status: 'In progress' }, '2026-10-28'), false, 'due today is not overdue');
+    assert.equal(isOverdue({ due: '2026-10-01', status: 'Completed' }, '2026-10-28'), false);
+    assert.equal(isOverdue({ due: '2026-10-29', status: 'Not started' }, '2026-10-28'), false);
+});
+test('the workflow monitor escalates each overdue CAPA once, as a rule-based System event', () => {
+    const s = createInitialState();
+    assert.ok(!s.audit.some(a => /escalat/i.test(a.action)), 'no static escalation event in the seed data');
+    assert.ok(s.capas.every(c => !('escalated' in c)), 'no static escalation flag');
+    const first = withEscalations(s, '2026-10-15', NOW);
+    const events = first.audit.filter(a => a.actor === ESCALATION_ACTOR);
+    assert.deepEqual(events.map(a => a.action.split(' ')[2]).sort(), ['CAPA-040', 'CAPA-042'], 'due 10-10 and 10-12, not completed');
+    assert.ok(events.every(a => a.kind === 'System' && !/\bAI\b/.test(a.actor + a.action)));
+    assert.equal(withEscalations(first, '2026-10-15', NOW), first, 'nothing new on a second run');
+    const later = withEscalations({ ...first, capas: first.capas.map(c => c.id === 'CAPA-042' ? { ...c, status: 'Completed' as const } : c) }, '2026-10-28', NOW);
+    assert.deepEqual(later.audit.filter(a => a.actor === ESCALATION_ACTOR).map(a => a.action.split(' ')[2]).sort(), ['CAPA-039', 'CAPA-040', 'CAPA-041', 'CAPA-042'], 'only CAPA-041 and CAPA-039 are new; CAPA-038 is completed');
+    assert.equal(later.audit.filter(a => a.actor === ESCALATION_ACTOR).length, 4);
 });

@@ -43,7 +43,6 @@ export interface CAPA {
     due: string;
     priority: Severity;
     status: 'Not started' | 'In progress' | 'Completed';
-    escalated: boolean;
 }
 export interface HistoricalCase {
     id: string;
@@ -100,6 +99,8 @@ export interface AppState {
     audit: AuditEvent[];
     // Current-lot evidence registered by an engineer in the UI. Only registerEvidence adds to it, never an agent response.
     evidence?: EvidenceRecord[];
+    // CAPA ids the rule-based workflow monitor has escalated. Each CAPA is escalated once.
+    escalated?: string[];
     // Last agent response's mode and model (local backend only).
     agent?: AgentInfo;
 }

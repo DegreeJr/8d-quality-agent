@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { AppState, NCR, CAPA, EvidenceRecord } from '@/lib/types';
 import { createInitialState, sectionDraft } from '@/lib/data';
 import { agentDraft, agentLabel, buildAgentRequest, proposeRootCause, type AgentResponse } from '@/lib/agent-client';
-import { reviewSection, canAccess, registerEvidence, registryOf, rootCauseCheck, rootCauseAuditAction, withAgentDraft, withAgentFailure } from '@/lib/workflow';
+import { reviewSection, canAccess, registerEvidence, registryOf, rootCauseCheck, rootCauseAuditAction, todayIso, withAgentDraft, withAgentFailure, withEscalations } from '@/lib/workflow';
 interface Store {
     state: AppState;
     ready: boolean;
@@ -18,7 +18,9 @@ interface Store {
     // Returns an error message, or null when the evidence was registered.
     registerEvidence: (id: string, input: { id: string; kind: string; summary: string }) => string | null;
     updateCapa: (id: string, status: CAPA['status']) => void;
-    assignCapa: (c: Omit<CAPA, 'id' | 'escalated'>) => void;
+    assignCapa: (c: Omit<CAPA, 'id'>) => void;
+    // Applies the rule-based CAPA escalation for today.
+    checkEscalations: () => void;
     notify: (s: string) => void;
     reset: () => void;
 }
@@ -65,6 +67,11 @@ export function AppProvider({ children }: {
                 setNotice('Browser storage is unavailable. Changes will last for this session only.');
             }
     }, [state, ready]);
+    // Opening the app runs the overdue rule once; withEscalations never escalates a CAPA twice.
+    useEffect(() => {
+        if (ready)
+            setState(s => withEscalations(s, todayIso(), new Date().toISOString()));
+    }, [ready]);
     useEffect(() => { if (notice) {
         const t = setTimeout(() => setNotice(''), 6000);
         return () => clearTimeout(t);
@@ -108,8 +115,9 @@ export function AppProvider({ children }: {
         } setState(next); setNotice(input.id.trim().toUpperCase() + ' registered as current-lot evidence for ' + id + '.'); return null; },
         logSystem: (id, action) => setState(s => ({ ...s, audit: [event(id, action, 'System'), ...s.audit] })),
         updateCapa: (id, status) => { setState(s => { const c = s.capas.find(c => c.id === id)!; return { ...s, capas: s.capas.map(c => c.id === id ? { ...c, status } : c), audit: [event(c.ncrId, id + ' status changed to ' + status), ...s.audit] }; }); setNotice('CAPA status updated.'); },
-        assignCapa: c => { const id = 'CAPA-' + String(Math.max(42, ...state.capas.map(c => Number(c.id.split('-')[1]))) + 1).padStart(3, '0'); setState(s => ({ ...s, capas: [{ ...c, id, escalated: false }, ...s.capas], audit: [event(c.ncrId, 'Assigned ' + id + ' to ' + c.owner), ...s.audit] })); setNotice('Corrective action assigned.'); },
-        reset: () => { setState(createInitialState()); setNotice('Demo reset to the original connected dataset.'); } };
+        assignCapa: c => { const id = 'CAPA-' + String(Math.max(42, ...state.capas.map(c => Number(c.id.split('-')[1]))) + 1).padStart(3, '0'); setState(s => ({ ...s, capas: [{ ...c, id }, ...s.capas], audit: [event(c.ncrId, 'Assigned ' + id + ' to ' + c.owner), ...s.audit] })); setNotice('Corrective action assigned.'); },
+        checkEscalations: () => setState(s => withEscalations(s, todayIso(), new Date().toISOString())),
+        reset: () => { setState(withEscalations(createInitialState(), todayIso(), new Date().toISOString())); setNotice('Demo reset to the original connected dataset.'); } };
     return <Context.Provider value={store}>{children}{notice && <div className="toast" role="status">{notice}</div>}</Context.Provider>;
 }
 export function useApp() { const ctx = useContext(Context); if (!ctx)

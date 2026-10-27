@@ -42,17 +42,16 @@ export function sectionDraft(n: NCR, d: number): string {
 }
 export function createInitialState(): AppState {
     return { version: 1, ncrs: initialNcrs, reports: initialNcrs.map(n => ({ ncrId: n.id, sections: Array.from({ length: 8 }, (_, d) => ({ content: d < 4 || n.status === 'Closed' ? sectionDraft(n, d) : '', status: n.status === 'Closed' ? (d === 3 || d === 4 ? 'Approved' : 'Complete') : d < 3 ? 'Complete' : d === 3 ? 'Draft' : 'Not started' })) })), capas: [
-            { id: 'CAPA-042', ncrId: 'NCR-2026-104', title: 'Inspect vent channels and validate process settings', description: 'Investigate tooling and process parameters. Record objective findings; do not implement a permanent process change until D5 approval.', owner: 'Sarah Chen', due: '2026-10-12', priority: 'Critical', status: 'In progress', escalated: true },
-            { id: 'CAPA-041', ncrId: 'NCR-2026-103', title: 'Introduce tool-life monitoring', description: 'Verify insert wear and establish a validated tool replacement interval.', owner: 'James Wilson', due: '2026-10-16', priority: 'Major', status: 'In progress', escalated: false },
-            { id: 'CAPA-040', ncrId: 'NCR-2026-101', title: 'Validate seal assembly fixture', description: 'Run controlled validation with leak testing on 30 assemblies.', owner: 'David Park', due: '2026-10-10', priority: 'Critical', status: 'Not started', escalated: true },
-            { id: 'CAPA-039', ncrId: 'NCR-2026-102', title: 'Review fixture contact surfaces', description: 'Inspect and replace worn pads, then verify surface finish.', owner: 'Maria Garcia', due: '2026-10-19', priority: 'Minor', status: 'Not started', escalated: false },
-            { id: 'CAPA-038', ncrId: 'NCR-2026-099', title: 'Verify deburring operation', description: 'Inspection accepted all pilot lot samples.', owner: 'James Wilson', due: '2026-10-06', priority: 'Minor', status: 'Completed', escalated: false }
+            { id: 'CAPA-042', ncrId: 'NCR-2026-104', title: 'Inspect vent channels and validate process settings', description: 'Investigate tooling and process parameters. Record objective findings; do not implement a permanent process change until D5 approval.', owner: 'Sarah Chen', due: '2026-10-12', priority: 'Critical', status: 'In progress' },
+            { id: 'CAPA-041', ncrId: 'NCR-2026-103', title: 'Introduce tool-life monitoring', description: 'Verify insert wear and establish a validated tool replacement interval.', owner: 'James Wilson', due: '2026-10-16', priority: 'Major', status: 'In progress' },
+            { id: 'CAPA-040', ncrId: 'NCR-2026-101', title: 'Validate seal assembly fixture', description: 'Run controlled validation with leak testing on 30 assemblies.', owner: 'David Park', due: '2026-10-10', priority: 'Critical', status: 'Not started' },
+            { id: 'CAPA-039', ncrId: 'NCR-2026-102', title: 'Review fixture contact surfaces', description: 'Inspect and replace worn pads, then verify surface finish.', owner: 'Maria Garcia', due: '2026-10-19', priority: 'Minor', status: 'Not started' },
+            { id: 'CAPA-038', ncrId: 'NCR-2026-099', title: 'Verify deburring operation', description: 'Inspection accepted all pilot lot samples.', owner: 'James Wilson', due: '2026-10-06', priority: 'Minor', status: 'Completed' }
         ], audit: [
             { id: 'a1', ncrId: 'NCR-2026-104', actor: 'Analysis agent (simulated)', kind: 'AI', action: 'Generated D4 draft; retrieved 2 historical references. Root cause remains unvalidated.', timestamp: '2026-10-13T08:42:00Z' },
             { id: 'a2', ncrId: 'NCR-2026-104', actor: 'Sarah Chen', kind: 'Human', action: 'Completed D3 containment: affected batch held.', timestamp: '2026-10-13T08:30:00Z' },
             { id: 'a3', ncrId: 'NCR-2026-104', actor: 'Classification agent (simulated)', kind: 'AI', action: 'Suggested classification: Porosity · POR-01.', timestamp: '2026-10-13T08:20:00Z' },
             { id: 'a4', ncrId: 'NCR-2026-104', actor: 'Sarah Chen', kind: 'Human', action: 'Created NCR and assigned the investigation team.', timestamp: '2026-10-13T08:15:00Z' },
-            { id: 'a5', ncrId: 'NCR-2026-101', actor: 'Workflow monitor', kind: 'System', action: 'Escalated overdue CAPA-040 to the quality lead.', timestamp: '2026-10-12T09:00:00Z' },
             { id: 'a6', ncrId: 'NCR-2026-103', actor: 'James Wilson', kind: 'Human', action: 'Assigned CAPA-041 for tool-life monitoring.', timestamp: '2026-10-11T10:00:00Z' }
-        ], evidence: [] };
+        ], evidence: [], escalated: [] };
 }
