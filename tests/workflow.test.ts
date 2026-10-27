@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createInitialState, sectionDraft } from '../src/lib/data';
-import { approvalsResetBy, canAccess, ESCALATION_ACTOR, evidenceFor, isD4Locked, isOverdue, registerEvidence, registryOf, reviewSection, RootCauseRejectedError, rootCauseCheck, withAgentDraft, withAgentFailure, withEscalations } from '../src/lib/workflow';
+import { approvalsResetBy, canAccess, d4EvidenceBanner, ESCALATION_ACTOR, evidenceFor, isD4Locked, isOverdue, registerEvidence, registryOf, reviewSection, RootCauseRejectedError, rootCauseCheck, withAgentDraft, withAgentFailure, withEscalations } from '../src/lib/workflow';
 import { buildAgentRequest, type AgentResponse } from '../src/lib/agent-client';
 import type { AuditEvent } from '../src/lib/types';
 test('D4 blocks D5 and D6 until a human approves', () => { const s = createInitialState(); assert.equal(canAccess(s, 'NCR-2026-104', 3), true); assert.equal(canAccess(s, 'NCR-2026-104', 4), false); assert.throws(() => reviewSection(s, 'NCR-2026-104', 3, true, ''), /validation evidence/); const reviewed = reviewSection(s, 'NCR-2026-104', 3, true, 'TR-104: current-lot controlled trial reviewed.'); assert.equal(canAccess(reviewed, 'NCR-2026-104', 4), true); assert.equal(canAccess(reviewed, 'NCR-2026-104', 5), false); });
@@ -128,4 +128,11 @@ test('Request revision on D5 after D4 approval returns D5 and keeps D4 approved'
     assert.equal(canAccess(after, 'NCR-2026-104', 4), true, 'D5 stays editable');
     assert.equal(canAccess(after, 'NCR-2026-104', 5), false, 'D6 locks until D5 is approved');
     assert.equal(after.ncrs[0].status, 'In progress');
+});
+
+test('the D4 banner names registered current-lot evidence when no historical precedent was retrieved', () => {
+    assert.equal(d4EvidenceBanner('NCR-2026-100', [], ['TR-100']), 'No historical precedent was retrieved for this case. Current-lot evidence registered for NCR-2026-100: TR-100. Validate any hypothesis against it before approval.');
+    assert.match(d4EvidenceBanner('NCR-2026-100', [], [])!, /^Evidence missing\. No historical evidence is available/);
+    assert.match(d4EvidenceBanner('NCR-2026-100', ['NCR-2025-071'], [])!, /^Current-lot evidence missing\. The 1 retrieved case \(NCR-2025-071\) is a historical reference only\./);
+    assert.equal(d4EvidenceBanner('NCR-2026-100', ['NCR-2025-071'], ['TR-100']), null);
 });

@@ -62,7 +62,7 @@ def test_strands_agent_is_wired_with_the_three_tools(corpus):
 
     engine = StrandsEngine("test", ModelSpec(model_id="stub", model_name=None, create=lambda: Stub()))
     agent = engine.build_agent(Toolbox(corpus, corpus.keyword_retriever()))
-    assert sorted(agent.tool_names) == ["get_ncr", "get_sap_quality_context", "search_similar_ncr"]
+    assert sorted(agent.tool_names) == ["get_ncr", "search_similar_ncr"]
 
 
 def test_aws_guard_is_active():

@@ -39,7 +39,8 @@
     {
       "tool": "get_sap_quality_context",
       "label": "SAP sandbox sample data (not current-lot evidence)",
-      "source": "cached sample"
+      "source": "cached sample",
+      "placeholder": true
     }
   ],
   "validation": {

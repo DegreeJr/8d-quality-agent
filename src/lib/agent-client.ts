@@ -42,6 +42,8 @@ export interface SapContextCall {
     label: string;
     // 'live sandbox' or 'cached sample'
     source: string;
+    // True while the content is the PLACEHOLDER fixture rather than SAP data.
+    placeholder?: boolean;
 }
 
 export class AgentError extends Error {
@@ -72,7 +74,7 @@ export function parseAgentResponse(json: unknown): AgentResponse {
         throw new AgentError('Agent returned an invalid response.');
     if (r.status !== 'success')
         throw new AgentError(typeof r.error === 'string' ? r.error : 'Agent returned an error.');
-    if (typeof r.mode !== 'string' || typeof r.ncr_id !== 'string' || (r.model_name !== undefined && r.model_name !== null && typeof r.model_name !== 'string') || (r.proposal_status !== undefined && !['unverified_hypothesis', 'hypothesis_with_current_evidence', 'no_hypothesis'].includes(r.proposal_status)) || typeof r.accepted !== 'boolean' || !isProposal(r.proposal) || !Array.isArray(r.retrieved) || !r.retrieved.every(h => h && typeof h.id === 'string') || !r.validation || !Array.isArray(r.validation.issues) || (r.sap_context !== undefined && !(Array.isArray(r.sap_context) && r.sap_context.every(c => c && typeof c.tool === 'string' && typeof c.label === 'string' && typeof c.source === 'string'))))
+    if (typeof r.mode !== 'string' || typeof r.ncr_id !== 'string' || (r.model_name !== undefined && r.model_name !== null && typeof r.model_name !== 'string') || (r.proposal_status !== undefined && !['unverified_hypothesis', 'hypothesis_with_current_evidence', 'no_hypothesis'].includes(r.proposal_status)) || typeof r.accepted !== 'boolean' || !isProposal(r.proposal) || !Array.isArray(r.retrieved) || !r.retrieved.every(h => h && typeof h.id === 'string') || !r.validation || !Array.isArray(r.validation.issues) || (r.sap_context !== undefined && !(Array.isArray(r.sap_context) && r.sap_context.every(c => c && typeof c.tool === 'string' && typeof c.label === 'string' && typeof c.source === 'string' && (c.placeholder === undefined || typeof c.placeholder === 'boolean')))))
         throw new AgentError('Agent response does not match the expected shape.');
     return r;
 }
@@ -100,7 +102,12 @@ export function backendLabel(backend: AgentBackend, info?: AgentInfo): { badge: 
 
 // Timeline entries for the SAP sandbox context the agent's tools fetched, with their source.
 export function sapContextAuditActions(r: AgentResponse): string[] {
-    return (r.sap_context ?? []).map(c => 'Tool ' + c.tool + ': ' + c.label + ', source: ' + c.source + '. Not used as evidence.');
+    // Only a live sandbox response that is not flagged as a placeholder counts as SAP content.
+    return (r.sap_context ?? []).map(c => 'Tool ' + c.tool + ': ' + c.label + ', source: ' + c.source + '.' + (c.source === 'live sandbox' && c.placeholder === false ? '' : ' Content is a placeholder, not SAP data.') + ' Not used as evidence.');
+}
+// Measured agent call duration for the timeline, in seconds with one decimal.
+export function formatDuration(ms: number): string {
+    return (Math.max(0, ms) / 1000).toFixed(1) + ' s';
 }
 
 // D4 draft text from an agent response. Rejected proposals become an "evidence missing" draft.

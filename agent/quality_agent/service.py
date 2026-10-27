@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import re
 from typing import Any
 
@@ -54,6 +55,9 @@ def propose_root_cause(payload: Any, engine: Engine, corpus: Corpus, retriever: 
                        sap_hub: SapHubClient | None = None) -> dict[str, Any]:
     request = parse_request(payload)
     toolbox = Toolbox(corpus, retriever, sap_hub=sap_hub)
+    # Called once per request by the service, not left to the model, so the timeline always shows the SAP context
+    # and its source. The engine gets the result as background; it is never evidence.
+    request = dataclasses.replace(request, sap_context=toolbox.get_sap_quality_context())
     raw = engine.propose(request, toolbox)
     ncr_id = request.ncr["id"]
     # Rule D: without current-lot evidence a hypothesis is unverified and must say what data is missing.
@@ -92,7 +96,7 @@ def propose_root_cause(payload: Any, engine: Engine, corpus: Corpus, retriever: 
             {"id": ncr_id, "score": score, "title": (corpus.get(ncr_id) or {}).get("title", "")}
             for ncr_id, score in toolbox.retrieved.items()
         ],
-        # SAP sandbox context the tools fetched: source only. Not evidence; it never changes proposal_status.
+        # SAP sandbox context fetched for this request: source and placeholder flag only. Not evidence; it never changes proposal_status.
         "sap_context": toolbox.sap_context_calls,
         "validation": validation.to_dict(),
         "accepted": validation.ok,

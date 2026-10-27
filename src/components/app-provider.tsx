@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { AppState, NCR, CAPA, EvidenceRecord } from '@/lib/types';
 import { createInitialState, sectionDraft } from '@/lib/data';
-import { agentDraft, agentLabel, buildAgentRequest, proposeRootCause, sapContextAuditActions, type AgentResponse } from '@/lib/agent-client';
+import { agentDraft, agentLabel, buildAgentRequest, formatDuration, proposeRootCause, sapContextAuditActions, type AgentResponse } from '@/lib/agent-client';
 import { reviewSection, canAccess, registerEvidence, registryOf, rootCauseCheck, rootCauseAuditAction, todayIso, withAgentDraft, withAgentFailure, withEscalations } from '@/lib/workflow';
 interface Store {
     state: AppState;
@@ -25,16 +25,19 @@ interface Store {
     reset: () => void;
 }
 // Agent helpers live outside the component so the React Compiler can still analyze it.
-async function requestAgentProposal(n: NCR, registry: EvidenceRecord[]): Promise<{ ok: true; response: AgentResponse } | { ok: false; error: string }> {
+// ms is the measured round trip of the agent call, as seen by the browser.
+async function requestAgentProposal(n: NCR, registry: EvidenceRecord[]): Promise<{ ok: true; response: AgentResponse; ms: number } | { ok: false; error: string; ms: number }> {
+    const start = performance.now();
     try {
-        return { ok: true, response: await proposeRootCause(buildAgentRequest(n, registry)) };
+        const response = await proposeRootCause(buildAgentRequest(n, registry));
+        return { ok: true, response, ms: performance.now() - start };
     }
     catch (e) {
-        return { ok: false, error: (e as Error).message };
+        return { ok: false, error: (e as Error).message, ms: performance.now() - start };
     }
 }
-function agentAuditAction(r: AgentResponse) {
-    return 'Generated D4 proposal; tools retrieved ' + (r.retrieved.map(h => h.id).join(', ') || 'no historical NCR') + '. Agent root cause check: ' + (r.accepted ? 'passed' : 'rejected (' + r.validation.issues.map(i => i.code).join(', ') + ')') + '.';
+function agentAuditAction(r: AgentResponse, ms: number) {
+    return 'Generated D4 proposal in ' + formatDuration(ms) + '; tools retrieved ' + (r.retrieved.map(h => h.id).join(', ') || 'no historical NCR') + '. Agent root cause check: ' + (r.accepted ? 'passed' : 'rejected (' + r.validation.issues.map(i => i.code).join(', ') + ')') + '.';
 }
 const Context = createContext<Store | null>(null);
 const key = '8d-quality-agent-v1';
@@ -90,7 +93,7 @@ export function AppProvider({ children }: {
                 return false;
             const result = await requestAgentProposal(n, registryOf(state));
             if (!result.ok) {
-                setState(s => withAgentFailure(s, event(id, 'Agent call failed: ' + result.error, 'System')));
+                setState(s => withAgentFailure(s, event(id, 'Agent call failed after ' + formatDuration(result.ms) + ': ' + result.error, 'System')));
                 setNotice('Agent unavailable: ' + result.error);
                 return false;
             }
@@ -99,7 +102,7 @@ export function AppProvider({ children }: {
             setState(s => {
                 const next = withAgentDraft(s, id, step, draft, r);
                 const actor = 'Quality agent (' + agentLabel(r) + ')';
-                const agentEvents = [event(id, agentAuditAction(r), 'AI', actor), ...sapContextAuditActions(r).map(a => event(id, a, 'AI', actor))];
+                const agentEvents = [event(id, agentAuditAction(r, result.ms), 'AI', actor), ...sapContextAuditActions(r).map(a => event(id, a, 'AI', actor))];
                 if (!r.accepted)
                     agentEvents.unshift(event(id, 'Agent output withheld by the root cause check; draft states evidence missing.', 'System'));
                 return { ...next, agent: { mode: r.mode, model_id: r.model_id, model_name: r.model_name ?? null }, audit: [...validationEvents(next, id, step, draft, 'generated'), ...agentEvents, ...s.audit] };

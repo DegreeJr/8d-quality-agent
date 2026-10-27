@@ -1,6 +1,7 @@
 """The agent's tools. Every NCR id a tool returns is recorded, so the service can check
 citations against what was actually retrieved in this invocation rather than what the model claims.
-get_sap_quality_context returns SAP sandbox sample data; it records only its source, never an NCR id or evidence."""
+get_sap_quality_context returns SAP sandbox sample data; it records only its source, never an NCR id or evidence.
+The service calls it once per request and passes the result to the engine, so it is not a model tool."""
 
 from __future__ import annotations
 
@@ -19,8 +20,9 @@ class Toolbox:
         self._retriever = retriever
         self._k = k
         self._sap_hub = sap_hub or SapHubClient(SapHubSettings())
-        # One entry per get_sap_quality_context call: its label and source (live sandbox or cached sample).
-        self.sap_context_calls: list[dict[str, str]] = []
+        # One entry per get_sap_quality_context call: label, source (live sandbox or cached sample) and whether the
+        # content is a placeholder rather than SAP data.
+        self.sap_context_calls: list[dict[str, Any]] = []
         # Ordered, de-duplicated ids returned by tools, with the best search score seen.
         self.retrieved: dict[str, float | None] = {}
 
@@ -57,7 +59,8 @@ class Toolbox:
 
     def get_sap_quality_context(self) -> dict[str, Any]:
         result = self._sap_hub.quality_context()
-        self.sap_context_calls.append({"tool": "get_sap_quality_context", "label": result["label"], "source": result["source"]})
+        self.sap_context_calls.append({"tool": "get_sap_quality_context", "label": result["label"], "source": result["source"],
+                                       "placeholder": result["placeholder"]})
         return result
 
     def strands_tools(self) -> list[Any]:
@@ -82,11 +85,4 @@ class Toolbox:
             """
             return self.get_ncr(ncr_id)
 
-        @tool
-        def get_sap_quality_context() -> dict:
-            """Read-only SAP QM context from the SAP Business Accelerator Hub sandbox. The result is SAP sandbox sample
-            data, not current-lot evidence: never cite it as evidence and never use it to confirm a root cause.
-            """
-            return self.get_sap_quality_context()
-
-        return [search_similar_ncr, get_ncr, get_sap_quality_context]
+        return [search_similar_ncr, get_ncr]

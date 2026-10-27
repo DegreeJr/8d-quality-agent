@@ -100,13 +100,13 @@ def test_tool_records_only_its_source_and_never_an_ncr_or_evidence(corpus, key_f
     toolbox = Toolbox(corpus, corpus.keyword_retriever(), sap_hub=live_hub(key_file))
     toolbox.get_sap_quality_context()
     assert toolbox.retrieved == {}
-    assert toolbox.sap_context_calls == [{"tool": "get_sap_quality_context", "label": LABEL, "source": LIVE}]
+    assert toolbox.sap_context_calls == [{"tool": "get_sap_quality_context", "label": LABEL, "source": LIVE, "placeholder": False}]
 
 
 def test_sandbox_context_never_unlocks_d4(corpus, key_file):
     payload = {"action": "propose_root_cause", "ncr": NCR_100, "current_evidence": []}
     response = propose_root_cause(payload, MockEngine(), corpus, corpus.keyword_retriever(), live_hub(key_file))
-    assert response["sap_context"] == [{"tool": "get_sap_quality_context", "label": LABEL, "source": LIVE}]
+    assert response["sap_context"] == [{"tool": "get_sap_quality_context", "label": LABEL, "source": LIVE, "placeholder": False}]
     assert response["proposal_status"] in ("unverified_hypothesis", "no_hypothesis")
     assert "TR-100" not in json.dumps(response["proposal"])
 
@@ -118,7 +118,6 @@ class SandboxCitingEngine:
 
     def propose(self, req, toolbox):
         ids = [r["id"] for r in toolbox.search_similar_ncr(req.ncr["title"] + ". " + req.ncr["description"])["results"]]
-        toolbox.get_sap_quality_context()
         return Proposal(root_cause="Hypothesis: nozzle wear as in " + ids[0] + ", confirmed by SAP sandbox data (lot TR-100).",
                         cited_ncr_ids=ids[:1], confidence="high", missing_data=["Current-lot trial."])
 
@@ -130,3 +129,39 @@ def test_validator_rejects_a_proposal_that_uses_sandbox_data_as_confirmation(cor
     assert "SANDBOX_DATA_AS_EVIDENCE" in [i["code"] for i in response["validation"]["issues"]]
     assert response["proposal"]["root_cause"] is None
     assert response["proposal_status"] == "no_hypothesis"
+
+
+class RecordingEngine:
+    """Records the request it gets and calls no SAP tool itself."""
+
+    mode = "scripted"
+    model_id = None
+    model_name = None
+
+    def __init__(self):
+        self.requests = []
+
+    def propose(self, req, toolbox):
+        self.requests.append(req)
+        return Proposal(root_cause=None, confidence="low", missing_data=["Evidence missing."])
+
+
+@pytest.mark.parametrize("engine_factory", [MockEngine, RecordingEngine])
+def test_service_fetches_sap_context_once_per_request_whatever_the_engine_does(corpus, engine_factory):
+    payload = {"action": "propose_root_cause", "ncr": NCR_100, "current_evidence": []}
+    response = propose_root_cause(payload, engine_factory(), corpus, corpus.keyword_retriever(),
+                                  SapHubClient(SapHubSettings(), transport=httpx.MockTransport(refuse)))
+    assert response["sap_context"] == [{"tool": "get_sap_quality_context", "label": LABEL, "source": CACHED, "placeholder": True}]
+
+
+def test_engine_receives_the_sap_context_and_the_prompt_marks_a_placeholder(corpus):
+    from quality_agent.engines import sap_context_prompt
+
+    engine = RecordingEngine()
+    payload = {"action": "propose_root_cause", "ncr": NCR_100, "current_evidence": []}
+    propose_root_cause(payload, engine, corpus, corpus.keyword_retriever(), SapHubClient(SapHubSettings()))
+    context = engine.requests[0].sap_context
+    assert context["source"] == CACHED and context["placeholder"] is True
+    prompt = sap_context_prompt(context)
+    assert LABEL in prompt and "PLACEHOLDER content, not SAP data" in prompt and "not evidence" in prompt
+    assert sap_context_prompt(None) == ""

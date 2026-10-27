@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { AgentError, agentDraft, backendLabel, buildAgentRequest, parseAgentResponse, proposeRootCause, sapContextAuditActions, type AgentResponse } from '../src/lib/agent-client';
+import { AgentError, agentDraft, backendLabel, buildAgentRequest, formatDuration, parseAgentResponse, proposeRootCause, sapContextAuditActions, type AgentResponse } from '../src/lib/agent-client';
 import { forwardToAgent } from '../src/lib/agent-proxy';
 import { createInitialState, evidenceRegistry } from '../src/lib/data';
 import { rootCauseCheck } from '../src/lib/workflow';
@@ -114,11 +114,22 @@ test('mode labels follow the backend and the model named in the last agent respo
 
 test('the SAP sandbox tool call is shown with its source and is never evidence', () => {
     const r = parseAgentResponse(contract);
-    assert.deepEqual(sapContextAuditActions(r), ['Tool get_sap_quality_context: SAP sandbox sample data (not current-lot evidence), source: cached sample. Not used as evidence.']);
+    assert.deepEqual(sapContextAuditActions(r), ['Tool get_sap_quality_context: SAP sandbox sample data (not current-lot evidence), source: cached sample. Content is a placeholder, not SAP data. Not used as evidence.']);
+    const live = { tool: 'get_sap_quality_context', label: 'SAP sandbox sample data (not current-lot evidence)', source: 'live sandbox' };
+    assert.deepEqual(sapContextAuditActions({ ...r, sap_context: [{ ...live, placeholder: false }] }), ['Tool get_sap_quality_context: SAP sandbox sample data (not current-lot evidence), source: live sandbox. Not used as evidence.']);
+    assert.match(sapContextAuditActions({ ...r, sap_context: [live] })[0], /placeholder, not SAP data/, 'no flag is treated as a placeholder');
+    assert.throws(() => parseAgentResponse({ ...contract, sap_context: [{ ...live, placeholder: 'no' }] }), AgentError);
     assert.deepEqual(sapContextAuditActions({ ...r, sap_context: undefined }), [], 'older agents send no sap_context');
     assert.throws(() => parseAgentResponse({ ...contract, sap_context: [{ tool: 'get_sap_quality_context' }] }), AgentError);
     // Citing the sandbox data as confirmation fails the check in the UI as well.
     const s = createInitialState();
     s.reports[0].agentRetrieved = r.retrieved;
     assert.deepEqual(rootCauseCheck(s, 'NCR-2026-104', 'Root cause is vent blockage per NCR-2025-084, confirmed by SAP sandbox data.').issues.map(i => i.code), ['SANDBOX_DATA_AS_EVIDENCE']);
+});
+
+test('agent call duration is shown in seconds with one decimal', () => {
+    assert.equal(formatDuration(4237), '4.2 s');
+    assert.equal(formatDuration(50), '0.1 s');
+    assert.equal(formatDuration(0), '0.0 s');
+    assert.equal(formatDuration(-3), '0.0 s');
 });

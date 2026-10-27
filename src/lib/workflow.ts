@@ -11,6 +11,18 @@ export function registryOf(state: AppState): EvidenceRecord[] {
 export function evidenceFor(state: AppState, id: string): EvidenceRecord[] {
     return registryOf(state).filter(r => r.ncrId === id);
 }
+// Yellow D4 banner text, or null when historical references and current-lot evidence are both present.
+export function d4EvidenceBanner(ncrId: string, retrievedIds: string[], currentLotIds: string[]): string | null {
+    if (!retrievedIds.length)
+        return currentLotIds.length
+            ? 'No historical precedent was retrieved for this case. Current-lot evidence registered for ' + ncrId + ': ' + currentLotIds.join(', ') + '. Validate any hypothesis against it before approval.'
+            : 'Evidence missing. No historical evidence is available for this case. Do not treat any hypothesis as a verified root cause.';
+    if (!currentLotIds.length) {
+        const one = retrievedIds.length === 1;
+        return 'Current-lot evidence missing. The ' + retrievedIds.length + ' retrieved ' + (one ? 'case' : 'cases') + ' (' + retrievedIds.join(', ') + ') ' + (one ? 'is a historical reference' : 'are historical references') + ' only. No current-lot evidence is registered for ' + ncrId + ' yet, so any root cause is an unverified hypothesis.';
+    }
+    return null;
+}
 // A human action in the UI is the only way to register evidence. The id must have a form the root cause check
 // recognises (PREFIX-NNN, see EVIDENCE_PREFIXES) and be unused, since the validator maps each id to one NCR.
 export function registerEvidence(state: AppState, ncrId: string, input: { id: string; kind: string; summary: string }, actor: string, now: string): AppState {

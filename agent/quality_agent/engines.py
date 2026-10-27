@@ -8,6 +8,7 @@ A new provider adds an entry to MODEL_PROVIDERS returning a ModelSpec, or implem
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
@@ -30,6 +31,8 @@ class Proposal(BaseModel):
 class EngineRequest:
     ncr: dict[str, str]
     current_evidence: list[EvidenceRef] = field(default_factory=list)
+    # The get_sap_quality_context result the service fetched for this request; background only, never evidence.
+    sap_context: dict[str, Any] | None = None
 
 
 class Engine(Protocol):
@@ -52,9 +55,8 @@ class MockEngine:
     model_name = None
 
     def propose(self, request: EngineRequest, toolbox: Toolbox) -> Proposal:
+        # Sandbox sample data (request.sap_context) never goes into the proposal.
         results = toolbox.search_similar_ncr(_query(request.ncr))["results"]
-        # Fetched like the agent would, for the timeline. Sandbox sample data never goes into the proposal.
-        toolbox.get_sap_quality_context()
         if not results:
             return Proposal(root_cause=None, confidence="low",
                             missing_data=["Evidence missing: no similar historical NCR was retrieved."])
@@ -79,7 +81,7 @@ Rules:
 - Do not propose generic causes such as "human error", "operator error" or "needs training" unless a cited NCR and a current-lot evidence id support it.
 - If no relevant historical NCR is found, set root_cause to null and say "evidence missing" in missing_data.
 - If no current-lot evidence is registered for the current NCR, the root cause is an unverified hypothesis: never call it confirmed or verified, phrase it as a hypothesis ("Hypothesis: ...", "may", "likely"), and list the data needed to verify it in missing_data.
-- get_sap_quality_context returns SAP sandbox sample data (not current-lot evidence). You may use it as background, but never cite it as evidence and never use it to confirm or verify a root cause.
+- The prompt may include SAP sandbox sample data (not current-lot evidence). You may use it as background, but never cite it as evidence and never use it to confirm or verify a root cause.
 - The output is a hypothesis for an engineer to validate, not a confirmed cause."""
 
 
@@ -90,6 +92,14 @@ class ModelSpec:
     model_id: str
     model_name: str | None
     create: Callable[[], Any] = field(repr=False)
+
+
+def sap_context_prompt(context: dict[str, Any] | None) -> str:
+    if context is None:
+        return ""
+    content = "PLACEHOLDER content, not SAP data" if context.get("placeholder", True) else "content"
+    return ("\n" + context["label"] + ", source: " + context["source"] + ", " + content + ". Background only, not evidence:\n"
+            + json.dumps(context.get("records", []), ensure_ascii=False))
 
 
 class StrandsEngine:
@@ -110,7 +120,8 @@ class StrandsEngine:
     def propose(self, request: EngineRequest, toolbox: Toolbox) -> Proposal:
         agent = self.build_agent(toolbox)
         prompt = ("Current NCR " + request.ncr["id"] + " (" + request.ncr.get("area", "") + "):\n" + _query(request.ncr)
-                  + "\nCurrent-lot evidence registered: " + (", ".join(e.id for e in request.current_evidence) or "none"))
+                  + "\nCurrent-lot evidence registered: " + (", ".join(e.id for e in request.current_evidence) or "none")
+                  + sap_context_prompt(request.sap_context))
         # structured_output_model per invocation, as in strands-agents 1.61.1 (Agent.structured_output is deprecated).
         # TODO(verify): structured output with the chosen model in a real account.
         result = agent(prompt, structured_output_model=Proposal)
