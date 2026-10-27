@@ -4,14 +4,15 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { AppState, NCR, CAPA, EvidenceRecord } from '@/lib/types';
 import { createInitialState, sectionDraft } from '@/lib/data';
 import { acceptanceEvent, suggestionEvent, withClassification, type ClassificationFields, type ClassificationResponse } from '@/lib/classification';
+import { intakeEvents, type DocumentIntake, type PhotoReading } from '@/lib/intake';
 import { agentDraft, agentLabel, buildAgentRequest, formatDuration, proposeRootCause, sapContextAuditActions, type AgentResponse } from '@/lib/agent-client';
 import { reviewSection, canAccess, registerEvidence, registryOf, rootCauseCheck, rootCauseAuditAction, todayIso, withAgentDraft, withAgentFailure, withEscalations } from '@/lib/workflow';
 interface Store {
     state: AppState;
     ready: boolean;
     notice: string;
-    // classification: the agent proposal the engineer saw in the form and the values they kept.
-    addNcr: (n: Omit<NCR, 'id' | 'date' | 'evidence' | 'status'>, classification?: { response: ClassificationResponse; chosen: ClassificationFields }) => string;
+    // extras: the agent proposals the engineer saw in the form (classification and the values they kept, upload readings).
+    addNcr: (n: Omit<NCR, 'id' | 'date' | 'evidence' | 'status'>, extras?: { classification?: { response: ClassificationResponse; chosen: ClassificationFields }; intake?: { document?: DocumentIntake; photo?: PhotoReading } }) => string;
     recordClassificationSuggestion: (id: string, r: ClassificationResponse) => void;
     acceptClassification: (id: string, r: ClassificationResponse, chosen: ClassificationFields) => void;
     saveSection: (id: string, step: number, content: string) => void;
@@ -87,7 +88,7 @@ export function AppProvider({ children }: {
     const validationEvents = (s: AppState, id: string, step: number, content: string, trigger: 'generated' | 'saved') => { if (step !== 3)
         return []; const check = rootCauseCheck(s, id, content); return check.ok ? [] : [event(id, rootCauseAuditAction(step, trigger, check.issues), 'System')]; };
     const store: Store = { state, ready, notice, notify: setNotice,
-        addNcr: (n, classification) => { const id = 'NCR-2026-' + String(Math.max(104, ...state.ncrs.map(x => Number(x.id.split('-').at(-1)))) + 1).padStart(3, '0'); setState(s => ({ ...s, ncrs: [{ ...n, id, date: new Date().toISOString().slice(0, 10), evidence: [], status: 'Open' }, ...s.ncrs], reports: [...s.reports, { ncrId: id, sections: Array.from({ length: 8 }, () => ({ content: '', status: 'Not started' })) }], audit: [...(classification ? [acceptanceEvent(id, classification.response, classification.chosen, 'Sarah Chen', new Date().toISOString()), suggestionEvent(id, classification.response, new Date().toISOString())] : []), event(id, 'Created NCR' + (n.document ? ' with simulated upload: ' + n.document : '.')), ...s.audit] })); setNotice(id + ' created. Ready for an 8D investigation.'); return id; },
+        addNcr: (n, extras) => { const classification = extras?.classification; const id = 'NCR-2026-' + String(Math.max(104, ...state.ncrs.map(x => Number(x.id.split('-').at(-1)))) + 1).padStart(3, '0'); setState(s => ({ ...s, ncrs: [{ ...n, id, date: new Date().toISOString().slice(0, 10), evidence: [], status: 'Open' }, ...s.ncrs], reports: [...s.reports, { ncrId: id, sections: Array.from({ length: 8 }, () => ({ content: '', status: 'Not started' })) }], audit: [...intakeEvents(id, extras?.intake ?? {}, 'Sarah Chen', new Date().toISOString()), ...(classification ? [acceptanceEvent(id, classification.response, classification.chosen, 'Sarah Chen', new Date().toISOString()), suggestionEvent(id, classification.response, new Date().toISOString())] : []), event(id, 'Created NCR' + ([n.document, n.photo].some(Boolean) ? ' with attachments: ' + [n.document, n.photo].filter(Boolean).join(', ') + '.' : '.')), ...s.audit] })); setNotice(id + ' created. Ready for an 8D investigation.'); return id; },
         recordClassificationSuggestion: (id, r) => setState(s => ({ ...s, audit: [suggestionEvent(id, r, new Date().toISOString()), ...s.audit] })),
         acceptClassification: (id, r, chosen) => { setState(s => withClassification(s, id, r, chosen, 'Sarah Chen', new Date().toISOString())); setNotice('Classification saved for ' + id + '.'); },
         saveSection: (id, step, content) => { setState(s => ({ ...s, reports: s.reports.map(r => r.ncrId !== id ? r : { ...r, sections: r.sections.map((x, i) => i === step ? { content, status: 'Draft' } : i > step ? { ...x, status: x.content ? 'Draft' : 'Not started', feedback: undefined } : x) }), ncrs: s.ncrs.map(n => n.id === id ? { ...n, status: 'In progress' } : n), audit: [...validationEvents(s, id, step, content, 'saved'), event(id, 'Edited D' + (step + 1) + '; downstream approvals require revalidation.'), ...s.audit] })); setNotice('Section saved. Changes invalidate downstream approvals.'); },

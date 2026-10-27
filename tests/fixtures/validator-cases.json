@@ -1,5 +1,5 @@
 {
-  "description": "Shared validator cases. Read by tests/validator.test.ts (TypeScript) and agent/tests/test_validator.py (Python). expectedCodes lists issue codes in order; messageIncludes are substrings of the joined issue messages; expectedStatus, when present, is the Rule D hypothesis status; missingData, when present, is passed as the proposal's missing-data list. Rule B ignores generic phrases that are themselves rejected or negated (B-context cases); B-smuggle cases must still fail. Rule E (ROOT_CAUSE_UNCITED) and Rule D's ROOT_CAUSE_STATED_AS_FACT cases include the SAP AI Core outputs recorded in VERIFICATION.md, which must keep passing. Rule F cases (prefix F:) cover SAP sandbox sample data used as evidence.",
+  "description": "Shared validator cases. Read by tests/validator.test.ts (TypeScript) and agent/tests/test_validator.py (Python). expectedCodes lists issue codes in order; messageIncludes are substrings of the joined issue messages; expectedStatus, when present, is the Rule D hypothesis status; missingData, when present, is passed as the proposal's missing-data list. Rule B ignores generic phrases that are themselves rejected or negated (B-context cases); B-smuggle cases must still fail. Rule E (ROOT_CAUSE_UNCITED) and Rule D's ROOT_CAUSE_STATED_AS_FACT cases include the SAP AI Core outputs recorded in VERIFICATION.md, which must keep passing. Rule F cases (prefix F:) cover SAP sandbox sample data used as evidence. Rule G cases (prefix G:) cover an uploaded photo or document used as evidence.",
   "registries": {
     "demo": [
       {
@@ -1244,6 +1244,114 @@
       "currentNcrId": "NCR-2026-104",
       "registry": "demo",
       "expectedCodes": []
+    },
+    {
+      "name": "G: the photo shows, offered as the basis of a root cause",
+      "text": "The photo shows porosity near the mounting boss, so the root cause is likely vent blockage per NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "demo",
+      "expectedCodes": [
+        "UPLOAD_AS_EVIDENCE"
+      ],
+      "expectedStatus": "evidence_registered",
+      "messageIncludes": [
+        "not current-lot evidence"
+      ]
+    },
+    {
+      "name": "G: the uploaded document confirms",
+      "text": "Hypothesis: vent blockage per NCR-2025-084. The uploaded document confirms the cold die.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "demo",
+      "expectedCodes": [
+        "UPLOAD_AS_EVIDENCE"
+      ],
+      "expectedStatus": "evidence_registered"
+    },
+    {
+      "name": "G: Indonesian, foto menunjukkan",
+      "text": "Hipotesis: ventilasi tersumbat seperti NCR-2025-084. Foto menunjukkan porositas di dekat boss.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "demo",
+      "expectedCodes": [
+        "UPLOAD_AS_EVIDENCE"
+      ]
+    },
+    {
+      "name": "G: pass, the photo is registered evidence cited in the same sentence",
+      "text": "Hypothesis: vent blockage per NCR-2025-084. The X-ray photo registered as TR-104 shows pores near the boss.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "demo",
+      "expectedCodes": [],
+      "expectedStatus": "evidence_registered"
+    },
+    {
+      "name": "G: an evidence id registered to another NCR does not lift the rule",
+      "text": "Hypothesis: vent blockage per NCR-2025-084. The X-ray photo GR-032 shows pores near the boss.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "demo",
+      "expectedCodes": [
+        "UPLOAD_AS_EVIDENCE"
+      ]
+    },
+    {
+      "name": "G: pass, the photo is stated not to be evidence",
+      "text": "Hypothesis: vent blockage per NCR-2025-084. The photo is an attachment, not evidence.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "demo",
+      "expectedCodes": []
+    },
+    {
+      "name": "G: pass, photos mentioned without being used as evidence",
+      "text": "Hypothesis: worn nozzle per NCR-2024-063. Photos of the brackets are attached for reference.",
+      "retrieved": [
+        "NCR-2024-063",
+        "NCR-2023-030",
+        "NCR-2024-049"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": [],
+      "expectedStatus": "unverified_hypothesis"
+    },
+    {
+      "name": "G: Indonesian, lampiran dokumen membuktikan",
+      "text": "Hipotesis: nozzle aus seperti NCR-2024-063. Lampiran dokumen membuktikan ketebalan rendah.",
+      "retrieved": [
+        "NCR-2024-063",
+        "NCR-2023-030",
+        "NCR-2024-049"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": [
+        "UPLOAD_AS_EVIDENCE"
+      ],
+      "expectedStatus": "unverified_hypothesis"
     }
   ]
 }

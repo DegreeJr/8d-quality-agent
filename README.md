@@ -69,6 +69,8 @@ Evidence ownership is checked against a synthetic, in-code registry (`src/lib/da
 
 In the app, D4 approval is refused while the check fails (`reviewSection` throws `RootCauseRejectedError`). Generated or saved D4 drafts that fail, and blocked approvals, are logged as System audit events. The D4 editor shows a live Root cause check panel with the evidence registered to the open NCR. Approve is disabled while the editor has unsaved changes.
 
+- **Rule G, upload as evidence** (`UPLOAD_AS_EVIDENCE`): a sentence that leans on an uploaded photo or document as evidence ("The photo shows pores near the boss.", "Foto menunjukkan porositas.") is rejected unless the same sentence cites a current-lot evidence id registered to the NCR ("The X-ray photo registered as TR-104 shows pores near the boss." passes) or says it is not evidence. Uploads are attachments; they never unlock D4.
+
 ### Register current-lot evidence
 
 D4 approval stays locked while no current-lot evidence is registered for the open NCR (Rule D). An engineer lifts the lock in the D4 panel under "Register current-lot evidence": enter an id, pick a type (Trial report, Parameter log, Inspection record, Measurement), add a short description and click "Register evidence". Only this human action adds evidence; agent responses never do. The id must use a prefix the root cause check recognises (`TR`, `GR`, `TI`, `TD`, `VT`, `PL`, `FV`, `FP`, `LAB`), a hyphen and at least three digits, for example `TR-100`, and must not be registered already (to any NCR). Each registration is a Human audit event with the id and type. Records persist in localStorage; a demo reset removes them.

@@ -15,6 +15,8 @@ export interface NCR {
     quantity: number;
     lot: string;
     document?: string;
+    // File name of an attached photo; the image itself is not stored.
+    photo?: string;
     evidence: string[];
 }
 export interface ReportSection {

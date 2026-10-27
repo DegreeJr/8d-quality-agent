@@ -67,6 +67,10 @@ The result is never current-lot evidence: the tool records only its source in th
 
 `{"action": "classify_ncr", "ncr": {"id"?, "title", "description"}}` on `/invocations` (`quality_agent/classify.py`) retrieves the top 5 similar historical NCRs with the keyword retriever and votes category, defect code, severity and area, one vote per case. A tie for the top count or an empty retrieval leaves the field null ("unclassified, evidence missing"). No model is called, so every `AGENT_MODE` gives the same answer. The response carries `proposal`, `votes`, `retrieved`, `cited_ncr_ids` and `missing_data`; the UI shows it as an agent proposal that the engineer accepts or edits.
 
+## NCR intake (extract_ncr_intake, describe_photo)
+
+`extract_ncr_intake` takes `{"file": {"name", "content_base64"}}` (.txt or .pdf, at most 5 MB; .docx is refused) and proposes title, description, lot, quantity and area by fixed rules (`quality_agent/intake.py`); fields it cannot find are null and listed in `missing_data`. PDF text needs `pypdf` (in `requirements.txt`). `describe_photo` takes `{"image": {"name", "mime", "content_base64"}}` (PNG, JPEG or WebP, at most 4 MB) and, in `AGENT_MODE=sap` only, returns the deployment's reading labelled "Agent reading of the photo, not validated" (`quality_agent/vision.py`). Other modes answer `error_type: "unavailable"`, "Photo analysis not available in this build". `scripts/check_vision.py` sends one generated test image and prints only `OUTCOME: image_accepted | image_rejected | other`.
+
 ## Bedrock readiness check
 
 `scripts/check_bedrock.py` runs one D4 proposal with `AGENT_MODE=bedrock` through the default AWS credential chain and prints one line, `OUTCOME: ok | no_credentials | access_denied | model_not_enabled | other`, with the exception type and AWS error code on failure. It never reads, prints or passes credentials and never prints error messages. It calls AWS for real and is not part of any test suite (only its classifier is unit tested).

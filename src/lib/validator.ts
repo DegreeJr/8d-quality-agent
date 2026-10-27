@@ -28,10 +28,13 @@
 // Rule F (sandbox data as evidence): a sentence that mentions SAP sandbox or cached sample data (the agent tool
 //   get_sap_quality_context) and uses it as evidence, proof or confirmation is rejected with SANDBOX_DATA_AS_EVIDENCE,
 //   unless the sentence says it is not evidence. Sandbox data never counts as current-lot evidence.
+// Rule G (upload as evidence): a sentence that leans on an uploaded photo or document ("the photo shows", "the
+//   document confirms", "foto menunjukkan") as evidence is rejected with UPLOAD_AS_EVIDENCE, unless the same sentence
+//   cites a current-lot evidence id accepted for this NCR (the engineer registered it) or says it is not evidence.
 
 import type { EvidenceRecord } from './types';
 
-export type ValidationIssueCode = 'CITATION_NOT_RETRIEVED' | 'GENERIC_CLAIM_UNSUPPORTED' | 'ROOT_CAUSE_WITHOUT_EVIDENCE' | 'ROOT_CAUSE_CLAIMED_CONFIRMED' | 'ROOT_CAUSE_STATED_AS_FACT' | 'MISSING_DATA_REQUIRED' | 'ROOT_CAUSE_UNCITED' | 'SANDBOX_DATA_AS_EVIDENCE';
+export type ValidationIssueCode = 'CITATION_NOT_RETRIEVED' | 'GENERIC_CLAIM_UNSUPPORTED' | 'ROOT_CAUSE_WITHOUT_EVIDENCE' | 'ROOT_CAUSE_CLAIMED_CONFIRMED' | 'ROOT_CAUSE_STATED_AS_FACT' | 'MISSING_DATA_REQUIRED' | 'ROOT_CAUSE_UNCITED' | 'SANDBOX_DATA_AS_EVIDENCE' | 'UPLOAD_AS_EVIDENCE';
 export type HypothesisStatus = 'unverified_hypothesis' | 'evidence_registered';
 
 export interface ValidationIssue {
@@ -117,6 +120,14 @@ const NOT_EVIDENCE = /\b(?:not|no|never|bukan|tidak|belum)\s+(?:(?:a|an|the|yet)
 
 function usesSandboxAsEvidence(text: string) {
     return sentencesOf(text).some(s => SANDBOX.test(s) && EVIDENCE_USE.test(s) && !NOT_EVIDENCE.test(s));
+}
+
+// Rule G: an uploaded photo or document is an attachment, not current-lot evidence, until it is registered.
+const UPLOAD = /\b(?:photos?|photographs?|images?|pictures?|foto|gambar|(?:the|this|that|uploaded|attached)\s+(?:document|file|pdf)|dokumen|attachments?|lampiran|uploads?|uploaded|unggahan)\b/i;
+const UPLOAD_USE = /\b(?:shows?|showed|shown|confirm(?:s|ed|ing)?|verif(?:y|ies|ied)|validat(?:e|es|ed)|prov(?:e|es|ed|en)|proof|evidence|demonstrat(?:e|es|ed)|menunjukkan|memperlihatkan|bukti|membuktikan|terkonfirmasi|dikonfirmasi|mengonfirmasi|terverifikasi)\b/i;
+
+function usesUploadAsEvidence(text: string, acceptedIds: readonly string[]) {
+    return sentencesOf(text).some(s => UPLOAD.test(s) && UPLOAD_USE.test(s) && !NOT_EVIDENCE.test(s) && !evidenceIdsIn(s).some(id => acceptedIds.includes(id)));
 }
 
 function assertsRootCause(text: string) {
@@ -276,6 +287,10 @@ export function validateRootCause(text: string, retrievedIds: readonly string[],
     // Rule F
     if (usesSandboxAsEvidence(text))
         issues.push({ code: 'SANDBOX_DATA_AS_EVIDENCE', message: 'SAP sandbox sample data is not current-lot evidence and cannot confirm a root cause. Cite a current-lot evidence id registered to the NCR instead.' });
+
+    // Rule G
+    if (usesUploadAsEvidence(text, evidence.accepted))
+        issues.push({ code: 'UPLOAD_AS_EVIDENCE', message: 'An uploaded photo or document is an attachment, not current-lot evidence. Register it as evidence in the D4 panel and cite its id in the same sentence, or state that evidence is missing.' });
 
     return hypothesisStatus ? { ok: issues.length === 0, issues, hypothesisStatus } : { ok: issues.length === 0, issues };
 }

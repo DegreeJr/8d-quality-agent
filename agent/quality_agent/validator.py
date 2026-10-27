@@ -14,6 +14,9 @@ Rule E (uncited root cause): with cases retrieved, a text that states a root cau
   or a current-lot evidence id. Not reported again when Rule B already rejected a generic claim.
 Rule F (sandbox data as evidence): a sentence that mentions SAP sandbox or cached sample data and uses it as
   evidence, proof or confirmation is rejected, unless the sentence says it is not evidence.
+Rule G (upload as evidence): a sentence that leans on an uploaded photo or document as evidence ("the photo shows",
+  "the document confirms") is rejected, unless it cites a current-lot evidence id accepted for this NCR or says it
+  is not evidence.
 Both suites run the cases in tests/fixtures/validator-cases.json.
 """
 
@@ -94,6 +97,21 @@ _NOT_EVIDENCE = re.compile(
 
 def _uses_sandbox_as_evidence(text: str) -> bool:
     return any(_SANDBOX.search(s) and _EVIDENCE_USE.search(s) and not _NOT_EVIDENCE.search(s) for s in _sentences(text))
+
+
+# Rule G: an uploaded photo or document is an attachment, not current-lot evidence, until it is registered.
+_UPLOAD = re.compile(
+    r"\b(?:photos?|photographs?|images?|pictures?|foto|gambar|(?:the|this|that|uploaded|attached)\s+(?:document|file|pdf)"
+    r"|dokumen|attachments?|lampiran|uploads?|uploaded|unggahan)\b", _FLAGS)
+_UPLOAD_USE = re.compile(
+    r"\b(?:shows?|showed|shown|confirm(?:s|ed|ing)?|verif(?:y|ies|ied)|validat(?:e|es|ed)|prov(?:e|es|ed|en)|proof|evidence"
+    r"|demonstrat(?:e|es|ed)|menunjukkan|memperlihatkan|bukti|membuktikan|terkonfirmasi|dikonfirmasi|mengonfirmasi"
+    r"|terverifikasi)\b", _FLAGS)
+
+
+def _uses_upload_as_evidence(text: str, accepted_ids: Sequence[str]) -> bool:
+    return any(_UPLOAD.search(s) and _UPLOAD_USE.search(s) and not _NOT_EVIDENCE.search(s)
+               and not any(i in accepted_ids for i in evidence_ids_in(s)) for s in _sentences(text))
 
 
 def _asserts_root_cause(text: str) -> bool:
@@ -302,5 +320,9 @@ def validate_root_cause(text: str, retrieved_ids: Sequence[str], *, current_ncr_
     # Rule F
     if _uses_sandbox_as_evidence(text):
         issues.append(ValidationIssue("SANDBOX_DATA_AS_EVIDENCE", "SAP sandbox sample data is not current-lot evidence and cannot confirm a root cause. Cite a current-lot evidence id registered to the NCR instead."))
+
+    # Rule G
+    if _uses_upload_as_evidence(text, accepted):
+        issues.append(ValidationIssue("UPLOAD_AS_EVIDENCE", "An uploaded photo or document is an attachment, not current-lot evidence. Register it as evidence in the D4 panel and cite its id in the same sentence, or state that evidence is missing."))
 
     return ValidationResult(ok=not issues, issues=issues, hypothesis_status=status)
