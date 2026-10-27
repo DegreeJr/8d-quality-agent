@@ -1,9 +1,10 @@
-// D2 and D3 drafts from the agent (action draft_section, agent/quality_agent/sections.py). Rule-based, no model:
-// D2 restates the NCR in 5W2H form, D3 reuses the containment of retrieved cases with a citation each.
+// D2, D3 and D7 drafts from the agent (action draft_section, agent/quality_agent/sections.py). Rule-based, no model:
+// D2 restates the NCR in 5W2H form, D3 reuses the containment of retrieved cases, D7 proposes prevention from
+// historical NCRs where the failure recurred, each action with its citations.
 import { AgentError, formatDuration } from './agent-client';
-import type { EvidenceRecord, NCR } from './types';
+import type { EvidenceRecord, NCR, ReportSection } from './types';
 
-export type DraftSection = 'D2' | 'D3';
+export type DraftSection = 'D2' | 'D3' | 'D7';
 
 export interface SectionResponse {
     status: 'success';
@@ -20,9 +21,10 @@ export interface SectionResponse {
     retrieved?: { id: string }[];
 }
 
-export function buildSectionRequest(ncr: NCR, section: DraftSection, registry: readonly EvidenceRecord[]) {
+// D7 also carries the approved D4, whose cited NCRs give the root cause code to look for recurrences of.
+export function buildSectionRequest(ncr: NCR, section: DraftSection, registry: readonly EvidenceRecord[], d4?: ReportSection) {
     const { id, title, description, area, code, category, severity, owner, date, quantity, lot } = ncr;
-    return { action: 'draft_section' as const, section, ncr: { id, title, description, area, code, category, severity, owner, date, quantity, lot }, current_evidence: registry.filter(r => r.ncrId === ncr.id).map(r => ({ id: r.id, ncrId: r.ncrId })) };
+    return { action: 'draft_section' as const, section, ncr: { id, title, description, area, code, category, severity, owner, date, quantity, lot }, current_evidence: registry.filter(r => r.ncrId === ncr.id).map(r => ({ id: r.id, ncrId: r.ncrId })), ...(section === 'D7' ? { d4_status: d4?.status ?? '', approved_d4: d4?.content ?? '' } : {}) };
 }
 
 export function parseSectionResponse(json: unknown, section: DraftSection): SectionResponse {
@@ -31,15 +33,15 @@ export function parseSectionResponse(json: unknown, section: DraftSection): Sect
         throw new AgentError('Agent returned no data.');
     if ((r as { status?: string }).status === 'error')
         throw new AgentError(typeof r.error === 'string' ? r.error : 'Agent request failed.');
-    if (r.status !== 'success' || r.task !== 'draft_section' || r.section !== section || typeof r.draft !== 'string' || !r.draft.trim() || (section === 'D2' && !Array.isArray(r.missing)) || (section === 'D3' && !(Array.isArray(r.actions) && r.actions.every(a => typeof a.action === 'string' && Array.isArray(a.cited_ncr_ids) && a.cited_ncr_ids.length > 0))))
+    if (r.status !== 'success' || r.task !== 'draft_section' || r.section !== section || typeof r.draft !== 'string' || !r.draft.trim() || (section === 'D2' && !Array.isArray(r.missing)) || (section !== 'D2' && !(Array.isArray(r.actions) && r.actions.every(a => typeof a.action === 'string' && Array.isArray(a.cited_ncr_ids) && a.cited_ncr_ids.length > 0))))
         throw new AgentError('Agent response does not match the expected shape.');
     return r;
 }
 
-export async function requestSectionDraft(ncr: NCR, section: DraftSection, registry: readonly EvidenceRecord[], fetchImpl: typeof fetch = fetch): Promise<SectionResponse> {
+export async function requestSectionDraft(ncr: NCR, section: DraftSection, registry: readonly EvidenceRecord[], fetchImpl: typeof fetch = fetch, d4?: ReportSection): Promise<SectionResponse> {
     let res: Response;
     try {
-        res = await fetchImpl('/api/agent/section', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildSectionRequest(ncr, section, registry)) });
+        res = await fetchImpl('/api/agent/section', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildSectionRequest(ncr, section, registry, d4)) });
     }
     catch {
         throw new AgentError('Could not reach the app API.');
@@ -50,5 +52,7 @@ export async function requestSectionDraft(ncr: NCR, section: DraftSection, regis
 export function sectionAuditAction(r: SectionResponse, ms: number): string {
     if (r.section === 'D2')
         return 'Generated D2 5W2H draft in ' + formatDuration(ms) + ' (rule-based, no model)' + (r.missing?.length ? '; evidence missing: ' + r.missing.join(', ') : '') + '.';
+    if (r.section === 'D7')
+        return 'Generated D7 prevention draft in ' + formatDuration(ms) + ' (from recurring historical failures, no model): ' + (r.actions?.length ?? 0) + ' cited ' + ((r.actions?.length ?? 0) === 1 ? 'action' : 'actions') + '.';
     return 'Generated D3 containment draft in ' + formatDuration(ms) + ' (reused from retrieved cases, no model): ' + (r.actions?.length ?? 0) + ' cited ' + ((r.actions?.length ?? 0) === 1 ? 'action' : 'actions') + (r.rejected?.length ? ', ' + r.rejected.length + ' withheld' : '') + '.';
 }

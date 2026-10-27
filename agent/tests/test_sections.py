@@ -61,7 +61,7 @@ def test_d3_without_retrieval_says_evidence_missing(corpus):
 
 
 @pytest.mark.parametrize("payload, match", [
-    ({"action": "draft_section", "section": "D4", "ncr": FULL}, 'section must be "D2" or "D3"'),
+    ({"action": "draft_section", "section": "D4", "ncr": FULL}, 'section must be "D2", "D3" or "D7"'),
     ({"action": "draft_section", "section": "D2", "ncr": {"id": "bad"}}, "ncr.id"),
 ])
 def test_bad_section_requests_are_refused(corpus, payload, match):
@@ -86,3 +86,48 @@ def test_section_contract_fixtures(corpus, section):
     if os.environ.get("UPDATE_FIXTURES") == "1":
         fixture.write_text(json.dumps(r, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     assert r == json.loads(fixture.read_text(encoding="utf-8"))
+
+
+D4_104 = "Hypothesis (historical, not validated): Vent channels blocked by release-agent build-up, as recorded in NCR-2025-084."
+
+
+def run_d7(corpus, d4=D4_104, status="Approved"):
+    return draft_section({"action": "draft_section", "section": "D7", "ncr": FULL, "current_evidence": [], "d4_status": status, "approved_d4": d4},
+                         corpus, corpus.keyword_retriever())
+
+
+def test_d7_cites_the_ncrs_where_the_failure_recurred(corpus):
+    r = run_d7(corpus)
+    code = corpus.get("NCR-2025-084")["rootCauseCode"]
+    assert r["root_cause_code"] == code and len(r["actions"]) == 2 and r["rejected"] == []
+    for a in r["actions"]:
+        assert len(a["cited_ncr_ids"]) == 3
+        assert all(corpus.get(i)["rootCauseCode"] == code for i in a["cited_ncr_ids"])
+    assert r["draft"].startswith("Agent proposal (prevention from recurring historical failures, no model, not validated) for NCR-2026-104:")
+
+
+def test_d7_without_recurrence_says_evidence_missing(corpus, monkeypatch):
+    unique = dict(corpus.get("NCR-2025-084"), rootCauseCode="UNIQUE-ONCE")
+    monkeypatch.setitem(corpus.ncrs, "NCR-2025-084", unique)
+    r = run_d7(corpus)
+    assert r["actions"] == [] and r["draft"].startswith("Evidence missing. The failure did not recur")
+
+
+def test_d7_needs_an_approved_d4(corpus):
+    with pytest.raises(RequestError, match="D7 needs the approved D4"):
+        run_d7(corpus, status="Draft")
+
+
+@pytest.mark.parametrize("text, cited, codes", [
+    ("Update the SOP for die maintenance.", [], ["ACTION_UNCITED", "GENERIC_ACTION_UNSUPPORTED"]),
+    ("Provide more training on vent cleaning.", [], ["ACTION_UNCITED", "GENERIC_ACTION_UNSUPPORTED"]),
+    ("Perbarui SOP pembersihan vent.", [], ["ACTION_UNCITED", "GENERIC_ACTION_UNSUPPORTED"]),
+    ("Add a vent-clearance poka-yoke to every die.", [], ["ACTION_UNCITED"]),
+    ("Update the SOP for die maintenance; the failure recurred in NCR-2025-084.", ["NCR-2025-084"], []),
+])
+def test_prevention_check(text, cited, codes):
+    from quality_agent.action_validator import validate_prevention_actions
+
+    issues = validate_prevention_actions([{"action": text, "cited_ncr_ids": cited, "evidence_ids": []}], ["NCR-2025-084"],
+                                         current_ncr_id="NCR-2026-104", evidence_registry=[])
+    assert [i.code for i in issues] == codes

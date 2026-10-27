@@ -115,9 +115,21 @@ def is_generic_containment(text: str) -> bool:
     return any(r.search(text) for r in _GENERIC_CONTAINMENT)
 
 
-def validate_containment_actions(actions: Sequence[dict], retrieved_ids: Sequence[str], *, current_ncr_id: str,
-                                 evidence_registry: Sequence[EvidenceRef]) -> list[ActionIssue]:
-    """D3: each containment action cites a retrieved NCR whose containment it reuses, or registered current-lot evidence."""
+_GENERIC_PREVENTION = [re.compile(p, _FLAGS) for p in (
+    r"\b(?:update|revise|review)\s+(?:the\s+)?(?:sops?|work\s+instructions?|procedures?)\b",
+    r"\b(?:more|additional|extra|refresher)\s+training\b",
+    r"\b(?:raise|increase)\s+awareness\b",
+    r"\b(?:perbarui|revisi)\s+(?:sop|instruksi\s+kerja|prosedur)\b",
+    r"\bpelatihan\b",
+)]
+
+
+def is_generic_prevention(text: str) -> bool:
+    return any(r.search(text) for r in _GENERIC_PREVENTION)
+
+
+def _validate_cited(actions: Sequence[dict], retrieved_ids: Sequence[str], current_ncr_id: str,
+                    evidence_registry: Sequence[EvidenceRef], label: str, generic, generic_message: str) -> list[ActionIssue]:
     retrieved = {i.upper() for i in retrieved_ids}
     current = current_ncr_id.upper()
     registered = {r.id.upper() for r in evidence_registry if r.ncr_id.upper() == current}
@@ -126,12 +138,26 @@ def validate_containment_actions(actions: Sequence[dict], retrieved_ids: Sequenc
         text = a["action"]
         cited = list(dict.fromkeys(i.upper() for i in [*a.get("cited_ncr_ids", []), *_ncr_ids_in(text)]))
         evidence = [i for i in dict.fromkeys(e.upper() for e in [*a.get("evidence_ids", []), *evidence_ids_in(text)]) if i in registered]
-        label = "Containment " + str(index + 1)
+        name = label + " " + str(index + 1)
         for i in cited:
             if i not in retrieved:
-                issues.append(ActionIssue(index, "CITATION_NOT_RETRIEVED", label + " cites " + i + ", which was not retrieved for this case."))
+                issues.append(ActionIssue(index, "CITATION_NOT_RETRIEVED", name + " cites " + i + ", which was not retrieved for this case."))
         if not any(i in retrieved for i in cited) and not evidence:
-            issues.append(ActionIssue(index, "ACTION_UNCITED", label + " cites no retrieved NCR whose containment it reuses and no current-lot evidence id registered to " + current + "."))
-            if is_generic_containment(text):
-                issues.append(ActionIssue(index, "GENERIC_ACTION_UNSUPPORTED", label + " is generic containment (hold, sort, 100% inspection) without a citation. Cite the NCR whose containment it reuses."))
+            issues.append(ActionIssue(index, "ACTION_UNCITED", name + " cites no retrieved NCR it reuses and no current-lot evidence id registered to " + current + "."))
+            if generic(text):
+                issues.append(ActionIssue(index, "GENERIC_ACTION_UNSUPPORTED", name + " " + generic_message))
     return issues
+
+
+def validate_containment_actions(actions: Sequence[dict], retrieved_ids: Sequence[str], *, current_ncr_id: str,
+                                 evidence_registry: Sequence[EvidenceRef]) -> list[ActionIssue]:
+    """D3: each containment action cites a retrieved NCR whose containment it reuses, or registered current-lot evidence."""
+    return _validate_cited(actions, retrieved_ids, current_ncr_id, evidence_registry, "Containment", is_generic_containment,
+                           "is generic containment (hold, sort, 100% inspection) without a citation. Cite the NCR whose containment it reuses.")
+
+
+def validate_prevention_actions(actions: Sequence[dict], retrieved_ids: Sequence[str], *, current_ncr_id: str,
+                                evidence_registry: Sequence[EvidenceRef]) -> list[ActionIssue]:
+    """D7: each prevention action cites retrieved NCRs where the failure recurred; generic prevention needs a citation."""
+    return _validate_cited(actions, retrieved_ids, current_ncr_id, evidence_registry, "Prevention", is_generic_prevention,
+                           "is generic prevention (update SOP, more training) without a citation. Cite the NCRs where the failure recurred.")

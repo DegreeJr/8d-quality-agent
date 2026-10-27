@@ -1,9 +1,11 @@
-"""draft_section: agent drafts for D2 and D3, without a model.
+"""draft_section: agent drafts for D2, D3 and D7, without a model.
 
 D2: the NCR restated in 5W2H form from the NCR fields and its description (which holds any extracted document
   text). A field that the NCR does not hold is written "Evidence missing", never inferred.
 D3: containment actions reused from the containment of similar historical NCRs, each citing the NCR it reuses.
   The containment check (action_validator.validate_containment_actions) withholds uncited and generic actions.
+D7: prevention from recurrence: the historical NCRs with the root cause code of the NCRs the approved D4 cites,
+  each prevention action citing them; with fewer than two recurrences the draft says "Evidence missing".
 """
 
 from __future__ import annotations
@@ -11,7 +13,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .action_validator import validate_containment_actions
+from .action_validator import validate_containment_actions, validate_prevention_actions
 from .corpus import Corpus
 from .retrieval import Retriever
 from .service import RequestError
@@ -94,15 +96,57 @@ def draft_d3(ncr: dict, corpus: Corpus, retriever: Retriever, evidence: list) ->
             "retrieved": [{"id": i, "score": s, "title": (corpus.get(i) or {}).get("title", "")} for i, s in toolbox.retrieved.items()]}
 
 
+def draft_d7(ncr: dict, approved_d4: str, corpus: Corpus, retriever: Retriever, evidence: list) -> dict[str, Any]:
+    """Prevention from recurrence: the root cause code of the NCRs the approved D4 cites (or of the most similar case)
+    and the historical NCRs where that failure recurred, each prevention action citing them."""
+    toolbox = Toolbox(corpus, retriever, k=D3_K)
+    cited = [corpus.get(i) for i in dict.fromkeys(m.upper() for m in re.findall(r"\bNCR-\d{4}-\d{3}\b", approved_d4, re.IGNORECASE))]
+    cited = [c for c in cited if c]
+    if not cited:
+        top = toolbox.search_similar_ncr((_field(ncr, "title") or "") + ". " + (_field(ncr, "description") or ""))["results"]
+        cited = [corpus.get(top[0]["id"])] if top else []
+    code = cited[0]["rootCauseCode"] if cited else None
+    recurrences = sorted((n for n in corpus.ncrs.values() if code and n["rootCauseCode"] == code), key=lambda n: (n["closedDate"], n["id"]), reverse=True)[:3]
+    for n in recurrences:
+        toolbox.get_ncr(n["id"])
+    actions: list[dict] = []
+    if len(recurrences) >= 2:
+        ids = [n["id"] for n in recurrences]
+        latest = recurrences[0]
+        actions = [
+            {"action": "Make the corrective action systemic across every " + latest["area"] + " cell and part number: " + latest["correctiveAction"].rstrip(".")
+                       + ". The failure recurred in " + ", ".join(ids) + ".", "cited_ncr_ids": ids, "evidence_ids": []},
+            {"action": "Add the failure mode (" + latest["confirmedRootCause"].rstrip(".") + ") to the " + latest["area"] + " PFMEA and control plan review, because it recurred in "
+                       + ", ".join(ids) + ".", "cited_ncr_ids": ids, "evidence_ids": []},
+        ]
+    issues = validate_prevention_actions(actions, toolbox.retrieved_ids, current_ncr_id=ncr["id"], evidence_registry=evidence + corpus.evidence_refs())
+    failed = {i.index for i in issues}
+    accepted = [a for n, a in enumerate(actions) if n not in failed]
+    rejected = [{**a, "issues": [i.to_dict() for i in issues if i.index == n]} for n, a in enumerate(actions) if n in failed]
+    if accepted:
+        text = ("Agent proposal (prevention from recurring historical failures, no model, not validated) for " + ncr["id"] + ":\n"
+                + "\n".join(str(n + 1) + ". " + a["action"] for n, a in enumerate(accepted)))
+    else:
+        text = MISSING + ". The failure did not recur among the historical NCRs, so no prevention is proposed from precedent. Define prevention for " + ncr["id"] + " from the D4 and D5 results."
+    return {"actions": accepted, "rejected": rejected, "draft": text, "root_cause_code": code,
+            "retrieved": [{"id": i, "score": s, "title": (corpus.get(i) or {}).get("title", "")} for i, s in toolbox.retrieved.items()]}
+
+
 def draft_section(payload: Any, corpus: Corpus, retriever: Retriever) -> dict[str, Any]:
     from .service import parse_request
 
     if not isinstance(payload, dict) or payload.get("action") != ACTION:
         raise RequestError('Use action "' + ACTION + '".')
     section = payload.get("section")
-    if section not in ("D2", "D3"):
-        raise RequestError('section must be "D2" or "D3".')
+    if section not in ("D2", "D3", "D7"):
+        raise RequestError('section must be "D2", "D3" or "D7".')
     base = parse_request({**payload, "action": "propose_root_cause"})
     ncr = {**{k: v for k, v in payload["ncr"].items() if isinstance(v, (str, int, float))}, "id": base.ncr["id"]}
-    body = draft_d2(ncr) if section == "D2" else draft_d3(ncr, corpus, retriever, base.current_evidence)
+    if section == "D7":
+        d4 = payload.get("approved_d4")
+        if payload.get("d4_status") != "Approved" or not isinstance(d4, str) or not d4.strip():
+            raise RequestError("D7 needs the approved D4 (d4_status \"Approved\" and approved_d4).")
+        body = draft_d7(ncr, d4, corpus, retriever, base.current_evidence)
+    else:
+        body = draft_d2(ncr) if section == "D2" else draft_d3(ncr, corpus, retriever, base.current_evidence)
     return {"status": "success", "task": ACTION, "section": section, "method": "rule-based, no model", "ncr_id": ncr["id"], **body}
