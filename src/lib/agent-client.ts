@@ -103,7 +103,8 @@ export function backendLabel(backend: AgentBackend, info?: AgentInfo): { badge: 
 // Timeline entries for the SAP sandbox context the agent's tools fetched, with their source.
 export function sapContextAuditActions(r: AgentResponse): string[] {
     // Only a live sandbox response that is not flagged as a placeholder counts as SAP content.
-    return (r.sap_context ?? []).map(c => 'Tool ' + c.tool + ': ' + c.label + ', source: ' + c.source + '.' + (c.source === 'live sandbox' && c.placeholder === false ? '' : ' Content is a placeholder, not SAP data.') + ' Not used as evidence.');
+    // Until a live sandbox response arrives, the entry says the Hub is not connected instead of describing placeholder content.
+    return (r.sap_context ?? []).map(c => c.source === 'live sandbox' && c.placeholder === false ? 'Tool ' + c.tool + ': ' + c.label + ', source: ' + c.source + '. Not used as evidence.' : 'Tool ' + c.tool + ': SAP Hub not connected. No SAP data was used.')
 }
 // Measured agent call duration for the timeline, in seconds with one decimal.
 export function formatDuration(ms: number): string {

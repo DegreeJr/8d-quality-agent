@@ -114,10 +114,10 @@ test('mode labels follow the backend and the model named in the last agent respo
 
 test('the SAP sandbox tool call is shown with its source and is never evidence', () => {
     const r = parseAgentResponse(contract);
-    assert.deepEqual(sapContextAuditActions(r), ['Tool get_sap_quality_context: SAP sandbox sample data (not current-lot evidence), source: cached sample. Content is a placeholder, not SAP data. Not used as evidence.']);
+    assert.deepEqual(sapContextAuditActions(r), ['Tool get_sap_quality_context: SAP Hub not connected. No SAP data was used.']);
     const live = { tool: 'get_sap_quality_context', label: 'SAP sandbox sample data (not current-lot evidence)', source: 'live sandbox' };
     assert.deepEqual(sapContextAuditActions({ ...r, sap_context: [{ ...live, placeholder: false }] }), ['Tool get_sap_quality_context: SAP sandbox sample data (not current-lot evidence), source: live sandbox. Not used as evidence.']);
-    assert.match(sapContextAuditActions({ ...r, sap_context: [live] })[0], /placeholder, not SAP data/, 'no flag is treated as a placeholder');
+    assert.match(sapContextAuditActions({ ...r, sap_context: [live] })[0], /SAP Hub not connected/, 'no flag is treated as not connected');
     assert.throws(() => parseAgentResponse({ ...contract, sap_context: [{ ...live, placeholder: 'no' }] }), AgentError);
     assert.deepEqual(sapContextAuditActions({ ...r, sap_context: undefined }), [], 'older agents send no sap_context');
     assert.throws(() => parseAgentResponse({ ...contract, sap_context: [{ tool: 'get_sap_quality_context' }] }), AgentError);

@@ -163,5 +163,50 @@ def test_engine_receives_the_sap_context_and_the_prompt_marks_a_placeholder(corp
     context = engine.requests[0].sap_context
     assert context["source"] == CACHED and context["placeholder"] is True
     prompt = sap_context_prompt(context)
-    assert LABEL in prompt and "PLACEHOLDER content, not SAP data" in prompt and "not evidence" in prompt
+    assert prompt == "\nSAP Hub not connected: no SAP context is available." and "PLACEHOLDER" not in prompt
+    live = sap_context_prompt({**context, "placeholder": False, "source": LIVE, "records": [{"Lot": "1"}]})
+    assert LABEL in live and "not evidence" in live and '"Lot": "1"' in live
     assert sap_context_prompt(None) == ""
+
+
+def load_check_sap_hub():
+    import importlib.util
+
+    from conftest import REPO
+
+    spec = importlib.util.spec_from_file_location("check_sap_hub", REPO / "agent" / "scripts" / "check_sap_hub.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_check_sap_hub_prints_status_count_and_field_names_only(monkeypatch, capsys, key_file):
+    monkeypatch.setenv("SAP_HUB_API_KEY_FILE", str(key_file))
+    monkeypatch.setenv("SAP_HUB_BASE_URL", "https://sandbox.example.test")
+    monkeypatch.setenv("SAP_HUB_SERVICE_PATH", "/qm/Rows")
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200, json={"d": {"results": [{"__metadata": {}, "InspectionLot": "SECRET-VALUE-1", "Plant": "1010"}, {"InspectionLot": "2"}]}})
+
+    assert load_check_sap_hub().main(httpx.MockTransport(handler)) == 0
+    out = capsys.readouterr().out
+    assert out == "HTTP status: 200\nRows: 2\nFields of the first row: InspectionLot, Plant\nOUTCOME: ok\n"
+    assert len(calls) == 1 and calls[0].headers["APIKey"] == FAKE_KEY
+    assert FAKE_KEY not in out and "SECRET-VALUE-1" not in out and "1010" not in out
+
+
+def test_check_sap_hub_without_settings_makes_no_call(capsys):
+    assert load_check_sap_hub().main(httpx.MockTransport(refuse)) == 2
+    assert capsys.readouterr().out.startswith("OUTCOME: not_configured")
+
+
+def test_check_sap_hub_reports_http_errors_without_the_body(monkeypatch, capsys, key_file):
+    monkeypatch.setenv("SAP_HUB_API_KEY_FILE", str(key_file))
+    monkeypatch.setenv("SAP_HUB_BASE_URL", "https://sandbox.example.test")
+    monkeypatch.setenv("SAP_HUB_SERVICE_PATH", "/qm/Rows")
+    transport = httpx.MockTransport(lambda r: httpx.Response(401, text="invalid key " + FAKE_KEY))
+    assert load_check_sap_hub().main(transport) == 1
+    out = capsys.readouterr().out
+    assert out == "HTTP status: 401\nOUTCOME: http_error\n" and FAKE_KEY not in out

@@ -97,7 +97,10 @@ class ModelSpec:
 def sap_context_prompt(context: dict[str, Any] | None) -> str:
     if context is None:
         return ""
-    content = "PLACEHOLDER content, not SAP data" if context.get("placeholder", True) else "content"
+    if context.get("placeholder", True):
+        # The cached fixture is a PLACEHOLDER, not SAP data, so the model gets no records from it.
+        return "\nSAP Hub not connected: no SAP context is available."
+    content = "content"
     return ("\n" + context["label"] + ", source: " + context["source"] + ", " + content + ". Background only, not evidence:\n"
             + json.dumps(context.get("records", []), ensure_ascii=False))
 
