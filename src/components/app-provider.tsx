@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { AppState, NCR, CAPA, EvidenceRecord } from '@/lib/types';
 import { createInitialState, sectionDraft } from '@/lib/data';
-import { agentDraft, agentLabel, buildAgentRequest, proposeRootCause, type AgentResponse } from '@/lib/agent-client';
+import { agentDraft, agentLabel, buildAgentRequest, proposeRootCause, sapContextAuditActions, type AgentResponse } from '@/lib/agent-client';
 import { reviewSection, canAccess, registerEvidence, registryOf, rootCauseCheck, rootCauseAuditAction, todayIso, withAgentDraft, withAgentFailure, withEscalations } from '@/lib/workflow';
 interface Store {
     state: AppState;
@@ -98,7 +98,8 @@ export function AppProvider({ children }: {
             const draft = agentDraft(r);
             setState(s => {
                 const next = withAgentDraft(s, id, step, draft, r);
-                const agentEvents = [event(id, agentAuditAction(r), 'AI', 'Quality agent (' + agentLabel(r) + ')')];
+                const actor = 'Quality agent (' + agentLabel(r) + ')';
+                const agentEvents = [event(id, agentAuditAction(r), 'AI', actor), ...sapContextAuditActions(r).map(a => event(id, a, 'AI', actor))];
                 if (!r.accepted)
                     agentEvents.unshift(event(id, 'Agent output withheld by the root cause check; draft states evidence missing.', 'System'));
                 return { ...next, agent: { mode: r.mode, model_id: r.model_id, model_name: r.model_name ?? null }, audit: [...validationEvents(next, id, step, draft, 'generated'), ...agentEvents, ...s.audit] };

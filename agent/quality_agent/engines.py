@@ -53,6 +53,8 @@ class MockEngine:
 
     def propose(self, request: EngineRequest, toolbox: Toolbox) -> Proposal:
         results = toolbox.search_similar_ncr(_query(request.ncr))["results"]
+        # Fetched like the agent would, for the timeline. Sandbox sample data never goes into the proposal.
+        toolbox.get_sap_quality_context()
         if not results:
             return Proposal(root_cause=None, confidence="low",
                             missing_data=["Evidence missing: no similar historical NCR was retrieved."])
@@ -77,6 +79,7 @@ Rules:
 - Do not propose generic causes such as "human error", "operator error" or "needs training" unless a cited NCR and a current-lot evidence id support it.
 - If no relevant historical NCR is found, set root_cause to null and say "evidence missing" in missing_data.
 - If no current-lot evidence is registered for the current NCR, the root cause is an unverified hypothesis: never call it confirmed or verified, phrase it as a hypothesis ("Hypothesis: ...", "may", "likely"), and list the data needed to verify it in missing_data.
+- get_sap_quality_context returns SAP sandbox sample data (not current-lot evidence). You may use it as background, but never cite it as evidence and never use it to confirm or verify a root cause.
 - The output is a hypothesis for an engineer to validate, not a confirmed cause."""
 
 

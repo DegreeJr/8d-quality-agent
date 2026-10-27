@@ -8,6 +8,7 @@ from typing import Any
 from .corpus import Corpus
 from .engines import Engine, EngineRequest, Proposal
 from .retrieval import Retriever
+from .sap_hub import SapHubClient
 from .tools import Toolbox
 from .validator import UNVERIFIED, EvidenceRef, validate_root_cause
 
@@ -49,15 +50,17 @@ def proposal_text(proposal: Proposal) -> str:
     return text
 
 
-def propose_root_cause(payload: Any, engine: Engine, corpus: Corpus, retriever: Retriever) -> dict[str, Any]:
+def propose_root_cause(payload: Any, engine: Engine, corpus: Corpus, retriever: Retriever,
+                       sap_hub: SapHubClient | None = None) -> dict[str, Any]:
     request = parse_request(payload)
-    toolbox = Toolbox(corpus, retriever)
+    toolbox = Toolbox(corpus, retriever, sap_hub=sap_hub)
     raw = engine.propose(request, toolbox)
     ncr_id = request.ncr["id"]
     # Rule D: without current-lot evidence a hypothesis is unverified and must say what data is missing.
     if raw.root_cause and not raw.missing_data and not any(e.ncr_id == ncr_id for e in request.current_evidence):
         raw = raw.model_copy(update={"missing_data": [UNVERIFIED_MISSING_DATA.format(ncr_id)]})
     # Rule A uses the ids the tools returned in this invocation, not ids the model claims to have retrieved.
+    # The registry is the caller's current-lot evidence plus the corpus records; SAP sandbox context is never part of it.
     validation = validate_root_cause(
         proposal_text(raw), toolbox.retrieved_ids, current_ncr_id=ncr_id,
         evidence_registry=request.current_evidence + corpus.evidence_refs(), missing_data=raw.missing_data,
@@ -89,6 +92,8 @@ def propose_root_cause(payload: Any, engine: Engine, corpus: Corpus, retriever: 
             {"id": ncr_id, "score": score, "title": (corpus.get(ncr_id) or {}).get("title", "")}
             for ncr_id, score in toolbox.retrieved.items()
         ],
+        # SAP sandbox context the tools fetched: source only. Not evidence; it never changes proposal_status.
+        "sap_context": toolbox.sap_context_calls,
         "validation": validation.to_dict(),
         "accepted": validation.ok,
     }

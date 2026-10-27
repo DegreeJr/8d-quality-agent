@@ -31,8 +31,17 @@ export interface AgentResponse {
     proposal: AgentProposal;
     raw_proposal: AgentProposal | null;
     retrieved: { id: string; score: number | null; title: string }[];
+    // get_sap_quality_context calls: SAP sandbox sample data, never current-lot evidence. Absent in older agents.
+    sap_context?: SapContextCall[];
     validation: { ok: boolean; issues: { code: string; message: string }[] };
     accepted: boolean;
+}
+
+export interface SapContextCall {
+    tool: string;
+    label: string;
+    // 'live sandbox' or 'cached sample'
+    source: string;
 }
 
 export class AgentError extends Error {
@@ -63,7 +72,7 @@ export function parseAgentResponse(json: unknown): AgentResponse {
         throw new AgentError('Agent returned an invalid response.');
     if (r.status !== 'success')
         throw new AgentError(typeof r.error === 'string' ? r.error : 'Agent returned an error.');
-    if (typeof r.mode !== 'string' || typeof r.ncr_id !== 'string' || (r.model_name !== undefined && r.model_name !== null && typeof r.model_name !== 'string') || (r.proposal_status !== undefined && !['unverified_hypothesis', 'hypothesis_with_current_evidence', 'no_hypothesis'].includes(r.proposal_status)) || typeof r.accepted !== 'boolean' || !isProposal(r.proposal) || !Array.isArray(r.retrieved) || !r.retrieved.every(h => h && typeof h.id === 'string') || !r.validation || !Array.isArray(r.validation.issues))
+    if (typeof r.mode !== 'string' || typeof r.ncr_id !== 'string' || (r.model_name !== undefined && r.model_name !== null && typeof r.model_name !== 'string') || (r.proposal_status !== undefined && !['unverified_hypothesis', 'hypothesis_with_current_evidence', 'no_hypothesis'].includes(r.proposal_status)) || typeof r.accepted !== 'boolean' || !isProposal(r.proposal) || !Array.isArray(r.retrieved) || !r.retrieved.every(h => h && typeof h.id === 'string') || !r.validation || !Array.isArray(r.validation.issues) || (r.sap_context !== undefined && !(Array.isArray(r.sap_context) && r.sap_context.every(c => c && typeof c.tool === 'string' && typeof c.label === 'string' && typeof c.source === 'string'))))
         throw new AgentError('Agent response does not match the expected shape.');
     return r;
 }
@@ -87,6 +96,11 @@ export function backendLabel(backend: AgentBackend, info?: AgentInfo): { badge: 
     if (info.mode === 'sap')
         return { badge: 'SAP AI CORE · ' + (info.model_name || info.model_id || 'unknown deployment'), summary: agentLabel(info) + ' via local agent.' };
     return { badge: 'LOCAL AGENT · ' + agentLabel(info).toUpperCase(), summary: 'Local agent, ' + agentLabel(info) + '.' };
+}
+
+// Timeline entries for the SAP sandbox context the agent's tools fetched, with their source.
+export function sapContextAuditActions(r: AgentResponse): string[] {
+    return (r.sap_context ?? []).map(c => 'Tool ' + c.tool + ': ' + c.label + ', source: ' + c.source + '. Not used as evidence.');
 }
 
 // D4 draft text from an agent response. Rejected proposals become an "evidence missing" draft.

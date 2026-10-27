@@ -12,6 +12,8 @@ Rule D (unverified hypothesis): with a registry and a current NCR that owns no r
   list must not be empty. Otherwise the status is "evidence_registered".
 Rule E (uncited root cause): with cases retrieved, a text that states a root cause must cite a retrieved NCR
   or a current-lot evidence id. Not reported again when Rule B already rejected a generic claim.
+Rule F (sandbox data as evidence): a sentence that mentions SAP sandbox or cached sample data and uses it as
+  evidence, proof or confirmation is rejected, unless the sentence says it is not evidence.
 Both suites run the cases in tests/fixtures/validator-cases.json.
 """
 
@@ -78,6 +80,20 @@ _HEDGES = re.compile(
 
 def _sentences(text: str) -> list[str]:
     return re.split(r"[.!?;\n]+", text)
+
+
+# Rule F: SAP Business Accelerator Hub sandbox data (tool get_sap_quality_context) is never current-lot evidence.
+_SANDBOX = re.compile(r"\b(?:sandbox|sap\s+(?:business\s+accelerator\s+)?hub|cached\s+sample|sap\s+sample)\b", _FLAGS)
+_EVIDENCE_USE = re.compile(
+    r"\b(?:confirm(?:s|ed|ing)?|verif(?:y|ies|ied)|validat(?:e|es|ed)|prov(?:e|es|ed|en)|proof|evidence|bukti|membuktikan"
+    r"|terkonfirmasi|dikonfirmasi|terverifikasi|tervalidasi)\b", _FLAGS)
+_NOT_EVIDENCE = re.compile(
+    r"\b(?:not|no|never|bukan|tidak|belum)\s+(?:(?:a|an|the|yet)\s+)?(?:current-lot\s+)?(?:evidence|bukti|proof|confirm\w*"
+    r"|verif\w*|validat\w*|terkonfirmasi|dikonfirmasi|terverifikasi)\b", _FLAGS)
+
+
+def _uses_sandbox_as_evidence(text: str) -> bool:
+    return any(_SANDBOX.search(s) and _EVIDENCE_USE.search(s) and not _NOT_EVIDENCE.search(s) for s in _sentences(text))
 
 
 def _asserts_root_cause(text: str) -> bool:
@@ -282,5 +298,9 @@ def validate_root_cause(text: str, retrieved_ids: Sequence[str], *, current_ncr_
             + (" and no current-lot evidence id registered to " + (current or "this NCR") if evidence_registry is not None
                else " and no current-lot evidence id")
             + ". Cite the supporting record or phrase it as an open question."))
+
+    # Rule F
+    if _uses_sandbox_as_evidence(text):
+        issues.append(ValidationIssue("SANDBOX_DATA_AS_EVIDENCE", "SAP sandbox sample data is not current-lot evidence and cannot confirm a root cause. Cite a current-lot evidence id registered to the NCR instead."))
 
     return ValidationResult(ok=not issues, issues=issues, hypothesis_status=status)

@@ -42,7 +42,7 @@ def test_unknown_mode_is_rejected():
         create_engine(settings("openai"))
 
 
-def test_strands_agent_is_wired_with_both_tools(corpus):
+def test_strands_agent_is_wired_with_the_three_tools(corpus):
     from strands.models import Model
 
     class Stub(Model):
@@ -62,7 +62,7 @@ def test_strands_agent_is_wired_with_both_tools(corpus):
 
     engine = StrandsEngine("test", ModelSpec(model_id="stub", model_name=None, create=lambda: Stub()))
     agent = engine.build_agent(Toolbox(corpus, corpus.keyword_retriever()))
-    assert sorted(agent.tool_names) == ["get_ncr", "search_similar_ncr"]
+    assert sorted(agent.tool_names) == ["get_ncr", "get_sap_quality_context", "search_similar_ncr"]
 
 
 def test_aws_guard_is_active():

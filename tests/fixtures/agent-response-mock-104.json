@@ -35,6 +35,13 @@
       "title": "Porosity near last-fill area"
     }
   ],
+  "sap_context": [
+    {
+      "tool": "get_sap_quality_context",
+      "label": "SAP sandbox sample data (not current-lot evidence)",
+      "source": "cached sample"
+    }
+  ],
   "validation": {
     "ok": true,
     "issues": [],

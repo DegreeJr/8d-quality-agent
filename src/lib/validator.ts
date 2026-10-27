@@ -25,10 +25,13 @@
 //   one retrieved NCR or one current-lot evidence id (registered to the current NCR when a registry is given).
 //   Otherwise: ROOT_CAUSE_UNCITED. The check is per text, not per sentence. With nothing retrieved Rule C
 //   applies instead, and a generic claim already rejected by Rule B is not reported twice.
+// Rule F (sandbox data as evidence): a sentence that mentions SAP sandbox or cached sample data (the agent tool
+//   get_sap_quality_context) and uses it as evidence, proof or confirmation is rejected with SANDBOX_DATA_AS_EVIDENCE,
+//   unless the sentence says it is not evidence. Sandbox data never counts as current-lot evidence.
 
 import type { EvidenceRecord } from './types';
 
-export type ValidationIssueCode = 'CITATION_NOT_RETRIEVED' | 'GENERIC_CLAIM_UNSUPPORTED' | 'ROOT_CAUSE_WITHOUT_EVIDENCE' | 'ROOT_CAUSE_CLAIMED_CONFIRMED' | 'ROOT_CAUSE_STATED_AS_FACT' | 'MISSING_DATA_REQUIRED' | 'ROOT_CAUSE_UNCITED';
+export type ValidationIssueCode = 'CITATION_NOT_RETRIEVED' | 'GENERIC_CLAIM_UNSUPPORTED' | 'ROOT_CAUSE_WITHOUT_EVIDENCE' | 'ROOT_CAUSE_CLAIMED_CONFIRMED' | 'ROOT_CAUSE_STATED_AS_FACT' | 'MISSING_DATA_REQUIRED' | 'ROOT_CAUSE_UNCITED' | 'SANDBOX_DATA_AS_EVIDENCE';
 export type HypothesisStatus = 'unverified_hypothesis' | 'evidence_registered';
 
 export interface ValidationIssue {
@@ -105,6 +108,15 @@ const HEDGES = /\b(?:hypothes[ie]s|hypothesi[sz]ed|hypothetical|possibl[ey]|may|
 
 function sentencesOf(text: string) {
     return text.split(/[.!?;\n]+/);
+}
+
+// Rule F: SAP Business Accelerator Hub sandbox data is never current-lot evidence.
+const SANDBOX = /\b(?:sandbox|sap\s+(?:business\s+accelerator\s+)?hub|cached\s+sample|sap\s+sample)\b/i;
+const EVIDENCE_USE = /\b(?:confirm(?:s|ed|ing)?|verif(?:y|ies|ied)|validat(?:e|es|ed)|prov(?:e|es|ed|en)|proof|evidence|bukti|membuktikan|terkonfirmasi|dikonfirmasi|terverifikasi|tervalidasi)\b/i;
+const NOT_EVIDENCE = /\b(?:not|no|never|bukan|tidak|belum)\s+(?:(?:a|an|the|yet)\s+)?(?:current-lot\s+)?(?:evidence|bukti|proof|confirm\w*|verif\w*|validat\w*|terkonfirmasi|dikonfirmasi|terverifikasi)\b/i;
+
+function usesSandboxAsEvidence(text: string) {
+    return sentencesOf(text).some(s => SANDBOX.test(s) && EVIDENCE_USE.test(s) && !NOT_EVIDENCE.test(s));
 }
 
 function assertsRootCause(text: string) {
@@ -260,6 +272,10 @@ export function validateRootCause(text: string, retrievedIds: readonly string[],
     // Rule E
     if (retrieved.size > 0 && asserts && !citesRetrieved && !hasEvidence && !issues.some(i => i.code === 'GENERIC_CLAIM_UNSUPPORTED'))
         issues.push({ code: 'ROOT_CAUSE_UNCITED', message: 'The text states a root cause but cites none of the retrieved NCRs (' + [...retrieved].join(', ') + ')' + (options.evidenceRegistry ? ' and no current-lot evidence id registered to ' + (current ?? 'this NCR') : ' and no current-lot evidence id') + '. Cite the supporting record or phrase it as an open question.' });
+
+    // Rule F
+    if (usesSandboxAsEvidence(text))
+        issues.push({ code: 'SANDBOX_DATA_AS_EVIDENCE', message: 'SAP sandbox sample data is not current-lot evidence and cannot confirm a root cause. Cite a current-lot evidence id registered to the NCR instead.' });
 
     return hypothesisStatus ? { ok: issues.length === 0, issues, hypothesisStatus } : { ok: issues.length === 0, issues };
 }

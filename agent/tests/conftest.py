@@ -29,6 +29,20 @@ def no_aws(monkeypatch):
         monkeypatch.delenv(name, raising=False)
 
 
+@pytest.fixture(autouse=True)
+def no_network(monkeypatch):
+    """Real HTTP transports fail the test; tests pass httpx.MockTransport. SAP Hub settings from the shell are ignored."""
+    import httpx
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("Tests must not make network calls.")
+
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", refuse)
+    monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", refuse)
+    for name in ("SAP_HUB_API_KEY_FILE", "SAP_HUB_BASE_URL", "SAP_HUB_SERVICE_PATH"):
+        monkeypatch.delenv(name, raising=False)
+
+
 @pytest.fixture(scope="session")
 def corpus() -> Corpus:
     return Corpus.load(REPO / "data")

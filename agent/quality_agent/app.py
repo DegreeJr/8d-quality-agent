@@ -15,6 +15,7 @@ from .config import Settings
 from .corpus import Corpus
 from .engines import Engine, create_engine
 from .sap import SapAuthError, SapConfigError
+from .sap_hub import SapHubClient, SapHubSettings
 from .service import RequestError, propose_root_cause
 
 logger = logging.getLogger("quality_agent")
@@ -25,16 +26,18 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     corpus = Corpus.load(settings.data_dir)
     retriever = corpus.keyword_retriever()
     engine = engine or create_engine(settings)
+    hub_settings = SapHubSettings.from_env()
+    sap_hub = SapHubClient(hub_settings)
     # Only non-secret settings are logged.
-    logger.info("quality agent: mode=%s model_id=%s model_name=%s region=%s corpus=%d", engine.mode, engine.model_id,
-                engine.model_name, settings.region, len(corpus.ncrs))
+    logger.info("quality agent: mode=%s model_id=%s model_name=%s region=%s corpus=%d sap_hub=%s", engine.mode, engine.model_id,
+                engine.model_name, settings.region, len(corpus.ncrs), "configured" if hub_settings.configured else "cached sample")
 
     app = BedrockAgentCoreApp()
 
     @app.entrypoint
     def invoke(payload: Any) -> dict[str, Any]:
         try:
-            return propose_root_cause(payload, engine, corpus, retriever)
+            return propose_root_cause(payload, engine, corpus, retriever, sap_hub)
         except RequestError as e:
             return {"status": "error", "error_type": "request", "error": str(e)}
         except (SapConfigError, SapAuthError) as e:

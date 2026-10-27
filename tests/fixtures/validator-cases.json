@@ -1,5 +1,5 @@
 {
-  "description": "Shared validator cases. Read by tests/validator.test.ts (TypeScript) and agent/tests/test_validator.py (Python). expectedCodes lists issue codes in order; messageIncludes are substrings of the joined issue messages; expectedStatus, when present, is the Rule D hypothesis status; missingData, when present, is passed as the proposal's missing-data list. Rule B ignores generic phrases that are themselves rejected or negated (B-context cases); B-smuggle cases must still fail. Rule E (ROOT_CAUSE_UNCITED) and Rule D's ROOT_CAUSE_STATED_AS_FACT cases include the SAP AI Core outputs recorded in VERIFICATION.md, which must keep passing.",
+  "description": "Shared validator cases. Read by tests/validator.test.ts (TypeScript) and agent/tests/test_validator.py (Python). expectedCodes lists issue codes in order; messageIncludes are substrings of the joined issue messages; expectedStatus, when present, is the Rule D hypothesis status; missingData, when present, is passed as the proposal's missing-data list. Rule B ignores generic phrases that are themselves rejected or negated (B-context cases); B-smuggle cases must still fail. Rule E (ROOT_CAUSE_UNCITED) and Rule D's ROOT_CAUSE_STATED_AS_FACT cases include the SAP AI Core outputs recorded in VERIFICATION.md, which must keep passing. Rule F cases (prefix F:) cover SAP sandbox sample data used as evidence.",
   "registries": {
     "demo": [
       {
@@ -1147,6 +1147,103 @@
       "expectedCodes": [
         "ROOT_CAUSE_CLAIMED_CONFIRMED"
       ]
+    },
+    {
+      "name": "F: SAP sandbox data used as confirmation of a hypothesis",
+      "text": "Hypothesis: worn nozzle per NCR-2024-063, confirmed by SAP sandbox data.",
+      "retrieved": [
+        "NCR-2024-063",
+        "NCR-2023-030",
+        "NCR-2024-049"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": [
+        "SANDBOX_DATA_AS_EVIDENCE"
+      ],
+      "expectedStatus": "unverified_hypothesis",
+      "messageIncludes": [
+        "not current-lot evidence"
+      ]
+    },
+    {
+      "name": "F: SAP Hub sandbox records offered as the evidence for a cited root cause",
+      "text": "Root cause is vent blockage per NCR-2025-084; evidence: SAP Hub sandbox inspection lots.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "demo",
+      "expectedCodes": [
+        "SANDBOX_DATA_AS_EVIDENCE"
+      ],
+      "expectedStatus": "evidence_registered"
+    },
+    {
+      "name": "F: Indonesian, cached sample offered as bukti",
+      "text": "Hipotesis: nozzle aus seperti NCR-2024-063. Bukti: data cached sample SAP.",
+      "retrieved": [
+        "NCR-2024-063",
+        "NCR-2023-030",
+        "NCR-2024-049"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": [
+        "SANDBOX_DATA_AS_EVIDENCE"
+      ]
+    },
+    {
+      "name": "F: confirmed root cause from sandbox data is reported by Rule D and Rule F",
+      "text": "Root cause is confirmed by SAP sandbox data: worn nozzle as in NCR-2024-063.",
+      "retrieved": [
+        "NCR-2024-063",
+        "NCR-2023-030",
+        "NCR-2024-049"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": [
+        "ROOT_CAUSE_CLAIMED_CONFIRMED",
+        "SANDBOX_DATA_AS_EVIDENCE"
+      ]
+    },
+    {
+      "name": "F: sandbox data labelled as not current-lot evidence passes",
+      "text": "Hypothesis: worn nozzle per NCR-2024-063. SAP sandbox sample data (not current-lot evidence) shows similar inspection lots.",
+      "retrieved": [
+        "NCR-2024-063",
+        "NCR-2023-030",
+        "NCR-2024-049"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": [],
+      "expectedStatus": "unverified_hypothesis"
+    },
+    {
+      "name": "F: sandbox data as background, explicitly not evidence, passes",
+      "text": "Possible root cause: worn nozzle, as in NCR-2024-063. The SAP sandbox records are background only and are not evidence.",
+      "retrieved": [
+        "NCR-2024-063",
+        "NCR-2023-030",
+        "NCR-2024-049"
+      ],
+      "currentNcrId": "NCR-2026-100",
+      "registry": "demo",
+      "expectedCodes": []
+    },
+    {
+      "name": "F: registered evidence plus sandbox background passes",
+      "text": "Root cause is vent blockage per NCR-2025-084, confirmed by trial TR-104. SAP sandbox data shows similar defect patterns.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2026-019"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "demo",
+      "expectedCodes": []
     }
   ]
 }
