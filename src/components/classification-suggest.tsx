@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { LoaderCircle, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { agentBackend } from '@/lib/agent-client';
-import { AREAS, CATEGORIES, CLASSIFICATION_ACTOR, requestClassification, SEVERITIES, UNCLASSIFIED, type ClassificationFields, type ClassificationResponse } from '@/lib/classification';
+import { agreementLabel, AREAS, CATEGORIES, CLASSIFICATION_ACTOR, requestClassification, SEVERITIES, UNCLASSIFIED, type ClassificationFields, type ClassificationResponse } from '@/lib/classification';
 import type { Severity } from '@/lib/types';
 
 const LABELS: [keyof ClassificationResponse['proposal'], string][] = [['category', 'Category'], ['defect_code', 'Defect code'], ['severity', 'Severity'], ['area', 'Production area']];
@@ -34,7 +34,7 @@ export function SuggestClassificationButton({ input, onResult }: { input: () => 
 }
 
 export function ClassificationProposal({ r }: { r: ClassificationResponse }) {
-    return <div className="classification-proposal callout blue-callout"><div><strong>Agent proposal, not validated</strong><small>{CLASSIFICATION_ACTOR} over {r.retrieved.length} similar historical {r.retrieved.length === 1 ? 'case' : 'cases'}</small><ul>{LABELS.map(([f, label]) => <li key={f}>{label}: <strong>{r.proposal[f] ?? UNCLASSIFIED}</strong> <small>({Object.entries(r.votes[f]).map(([v, n]) => v + ' ' + n).join(', ') || 'no votes'})</small></li>)}</ul><small>Cited cases: {r.cited_ncr_ids.join(', ') || 'none'}</small>{r.missing_data.map(m => <small key={m}>{m}</small>)}</div></div>;
+    return <div className="classification-proposal callout blue-callout"><div><strong>Agent proposal, not validated</strong><small>{CLASSIFICATION_ACTOR} over {r.retrieved.length} similar historical {r.retrieved.length === 1 ? 'case' : 'cases'}</small><ul>{LABELS.map(([f, label]) => <li key={f}>{label}: <strong>{r.proposal[f] ?? UNCLASSIFIED}</strong>{agreementLabel(r, f) && <> <span className="badge badge-major">{agreementLabel(r, f)}</span></>} <small>({Object.entries(r.votes[f]).map(([v, n]) => v + ' ' + n).join(', ') || 'no votes'})</small></li>)}</ul><small>Cited cases: {r.cited_ncr_ids.join(', ') || 'none'}</small>{r.missing_data.map(m => <small key={m}>{m}</small>)}</div></div>;
 }
 
 // Editable fields for the engineer; used in the create form and in the NCR detail.

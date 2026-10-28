@@ -62,6 +62,18 @@ def test_a_tied_field_is_left_unclassified_and_the_rest_is_kept(corpus):
     assert "tied vote for category, defect_code, area" in r["missing_data"][0]
 
 
+def test_a_tied_defect_code_is_voted_again_within_the_winning_category(corpus):
+    def ids_with(code, n):
+        return [r["id"] for r in corpus.ncrs.values() if r["defectCode"] == code][:n]
+
+    # Codes tie 2:2 overall (POR-01, DIM-02), but 3 of the 5 cases are Porosity and 2 of those are POR-01.
+    ids = ids_with("POR-01", 2) + ids_with("POR-02", 1) + ids_with("DIM-02", 2)
+    assert {corpus.get(i)["category"] for i in ids[:3]} == {"Porosity"}
+    r = classify_ncr(request(), corpus, FixedRetriever(ids))
+    assert r["votes"]["defect_code"]["POR-01"] == 2 and r["votes"]["defect_code"]["DIM-02"] == 2
+    assert r["proposal"]["category"] == "Porosity" and r["proposal"]["defect_code"] == "POR-01"
+
+
 def test_the_ncr_itself_is_not_a_vote(corpus):
     own = next(iter(corpus.ncrs))
     r = classify_ncr(request(id=own), corpus, FixedRetriever([own]))

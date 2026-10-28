@@ -61,6 +61,10 @@ def classify_ncr(payload: Any, corpus: Corpus, retriever: Retriever, k: int = CL
     votes: dict[str, dict[str, int]] = {}
     for field, source in FIELDS.items():
         proposal[field], votes[field] = vote([r[source] for r in records])
+    # A tied defect code is voted again among the cases of the winning category; votes keep the full count, so the
+    # UI shows it as low agreement. A tie there too stays unclassified.
+    if proposal["defect_code"] is None and proposal["category"] is not None:
+        proposal["defect_code"], _ = vote([r["defectCode"] for r in records if r["category"] == proposal["category"]])
     # Cited: the cases that agree with every field that was classified.
     cited = [r["id"] for r in records if all(proposal[f] is None or r[s] == proposal[f] for f, s in FIELDS.items())]
     unresolved = [f for f in FIELDS if proposal[f] is None]

@@ -67,8 +67,30 @@ export function proposedFields(r: ClassificationResponse, current: Classificatio
     return out;
 }
 
+// How many retrieved cases voted for the proposed value. Low agreement: no more than half of them (e.g. 2 of 5),
+// which includes a defect code decided again within the winning category after a tie.
+export function agreement(r: ClassificationResponse, f: ProposalField): { count: number; total: number; low: boolean } | null {
+    const value = r.proposal[f];
+    if (value === null)
+        return null;
+    const count = r.votes[f][value] ?? 0;
+    const total = Object.values(r.votes[f]).reduce((a, b) => a + b, 0);
+    return { count, total, low: count * 2 <= total };
+}
+
+export function agreementLabel(r: ClassificationResponse, f: ProposalField): string {
+    const a = agreement(r, f);
+    return a?.low ? 'low agreement: ' + a.count + ' of ' + a.total : '';
+}
+
 function describe(r: ClassificationResponse): string {
-    return FIELDS.map(f => r.proposal[f] ?? f.replace('_', ' ') + ' ' + UNCLASSIFIED).join(' · ');
+    return FIELDS.map(f => r.proposal[f] === null ? f.replace('_', ' ') + ' ' + UNCLASSIFIED : r.proposal[f] + (agreementLabel(r, f) ? ' (' + agreementLabel(r, f) + ')' : '')).join(' · ');
+}
+
+// Required fields of the New NCR form that are still empty, by their form label.
+export function missingRequiredFields(v: { title: string; description: string; code: string; lot: string; quantity: string }): string[] {
+    const labels: [keyof typeof v, string][] = [['title', 'Problem title'], ['description', 'Problem description'], ['code', 'Defect code'], ['lot', 'Lot / batch number'], ['quantity', 'Affected quantity']];
+    return labels.filter(([k]) => !v[k].trim() || (k === 'quantity' && !(Number(v[k]) >= 1))).map(([, label]) => label);
 }
 
 function fieldsText(c: ClassificationFields): string {

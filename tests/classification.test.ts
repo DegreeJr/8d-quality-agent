@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { AgentError } from '../src/lib/agent-client';
-import { acceptanceAction, CLASSIFICATION_ACTOR, parseClassification, proposedFields, requestClassification, suggestionAction, suggestionEvent, withClassification, type ClassificationResponse } from '../src/lib/classification';
+import { AgentError, LOCAL_AGENT_SCOPE } from '../src/lib/agent-client';
+import { acceptanceAction, agreement, agreementLabel, CLASSIFICATION_ACTOR, missingRequiredFields, parseClassification, proposedFields, requestClassification, suggestionAction, suggestionEvent, withClassification, type ClassificationResponse } from '../src/lib/classification';
 import { createInitialState } from '../src/lib/data';
 import { eventBadge, isD4Locked } from '../src/lib/workflow';
 
@@ -63,4 +63,28 @@ test('suggestion is an AI event by the classification agent; only acceptance cha
 test('seeded simulated classification events stay labelled simulated', () => {
     const seeded = createInitialState().audit.find(a => a.actor === 'Classification agent (simulated)')!;
     assert.equal(eventBadge(seeded), 'Simulated AI');
+});
+
+test('a proposal with no majority is marked low agreement; a clear majority is not', () => {
+    const split: ClassificationResponse = { ...contract, votes: { ...contract.votes, defect_code: { 'POR-01': 2, 'POR-02': 2, 'DIM-02': 1 }, severity: { Major: 3, Minor: 2 } }, proposal: { ...contract.proposal, defect_code: 'POR-01', severity: 'Major' } };
+    assert.deepEqual(agreement(split, 'defect_code'), { count: 2, total: 5, low: true });
+    assert.equal(agreementLabel(split, 'defect_code'), 'low agreement: 2 of 5');
+    assert.equal(agreementLabel(split, 'severity'), '', '3 of 5 is a majority');
+    assert.equal(agreementLabel(contract, 'category'), '');
+    assert.equal(agreement(unclassified, 'category'), null);
+    assert.match(suggestionAction(split), /POR-01 \(low agreement: 2 of 5\) · Major · Die casting/);
+    assert.equal(proposedFields(split, { category: 'Unclassified', code: '', severity: 'Minor', area: 'Assembly' }).code, 'POR-01', 'the code is filled');
+});
+
+test('Create NCR names the required fields that are still empty', () => {
+    assert.deepEqual(missingRequiredFields({ title: 'Porosity in housing', description: 'Pores near the boss on 48 parts.', code: '', lot: 'LOT-DC-1', quantity: '48' }), ['Defect code']);
+    assert.deepEqual(missingRequiredFields({ title: ' ', description: '', code: 'POR-01', lot: '', quantity: '0' }), ['Problem title', 'Problem description', 'Lot / batch number', 'Affected quantity']);
+    assert.deepEqual(missingRequiredFields({ title: 'x', description: 'y', code: 'POR-01', lot: 'L', quantity: '1' }), []);
+});
+
+test('the workspace header lists only model sections as model and names the rule-based ones', () => {
+    const [model, rules] = LOCAL_AGENT_SCOPE.split(' · rule-based: ');
+    assert.match(model, /model: D4, D5, photo reading at NCR intake$/);
+    assert.doesNotMatch(model, /D2|D3|D7/);
+    assert.equal(rules, 'D1 to D3, D6 to D8');
 });

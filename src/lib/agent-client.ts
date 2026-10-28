@@ -81,6 +81,9 @@ export function parseAgentResponse(json: unknown): AgentResponse {
     return r;
 }
 
+// Workspace header with the local agent: which sections call a model and which are fixed rules.
+export const LOCAL_AGENT_SCOPE = 'Agent API (local) · model: D4, D5, photo reading at NCR intake · rule-based: D1 to D3, D6 to D8';
+
 export function agentLabel(r: AgentInfo) {
     if (r.mode === 'mock')
         return 'local agent, mock mode without a model';
