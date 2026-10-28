@@ -10,3 +10,4 @@
 .register-evidence{margin-top:14px;gap:10px;border:1px solid var(--border);border-radius:6px;padding:12px 14px;background:#fafbfe;font-size:11px}.register-evidence small{color:var(--muted)}
 .badge-agent{background:#eef0ff;color:#5d63c4}.classification-proposal>div{display:flex;flex-direction:column;gap:6px}.classification-proposal ul{margin:0;padding-left:18px}
 .stack-tight{display:flex;flex-direction:column;gap:6px}.intake-uploads{margin-top:0}
+.draft-language{flex-direction:row;align-items:center;gap:8px;font-size:11px;color:#7c889c;white-space:nowrap}

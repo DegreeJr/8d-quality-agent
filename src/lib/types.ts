@@ -1,3 +1,4 @@
+export type DraftLanguage = 'en' | 'id';
 export type Severity = 'Critical' | 'Major' | 'Minor';
 export type NcrStatus = 'Open' | 'In progress' | 'Pending approval' | 'Closed';
 export type StepStatus = 'Not started' | 'Draft' | 'Rejected' | 'Approved' | 'Complete';
@@ -105,6 +106,8 @@ export interface AppState {
     evidence?: EvidenceRecord[];
     // CAPA ids the rule-based workflow monitor has escalated. Each CAPA is escalated once.
     escalated?: string[];
+    // Language of agent drafts (D2 to D5, D7). UI text and validator rules do not change with it.
+    draftLanguage?: DraftLanguage;
     // Last agent response's mode and model (local backend only).
     agent?: AgentInfo;
 }

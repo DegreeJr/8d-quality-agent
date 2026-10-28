@@ -16,6 +16,7 @@ from typing import Any, Literal, Protocol
 from pydantic import BaseModel, Field
 
 from .config import Settings
+from .language import t
 from .tools import Toolbox
 from .validator import EvidenceRef
 
@@ -33,6 +34,8 @@ class EngineRequest:
     current_evidence: list[EvidenceRef] = field(default_factory=list)
     # The get_sap_quality_context result the service fetched for this request; background only, never evidence.
     sap_context: dict[str, Any] | None = None
+    # Draft language, "en" or "id" (language.py). Ids and validator rules do not depend on it.
+    language: str = "en"
 
 
 class Engine(Protocol):
@@ -58,18 +61,16 @@ class MockEngine:
         # Sandbox sample data (request.sap_context) never goes into the proposal.
         results = toolbox.search_similar_ncr(_query(request.ncr))["results"]
         if not results:
-            return Proposal(root_cause=None, confidence="low",
-                            missing_data=["Evidence missing: no similar historical NCR was retrieved."])
+            return Proposal(root_cause=None, confidence="low", missing_data=[t(request.language, "d4_none")])
         records = [toolbox.get_ncr(r["id"]) for r in results]
         top = records[0]
         supporting = [r for r in records if r["rootCauseCode"] == top["rootCauseCode"]]
         confidence: Literal["low", "medium", "high"] = "high" if len(supporting) >= 3 else "medium" if len(supporting) == 2 else "low"
         cited = [r["id"] for r in supporting]
-        missing = [] if request.current_evidence else ["No current-lot evidence is registered for " + request.ncr["id"] + "."]
-        missing.append("Current-lot confirmation (controlled trial or inspection) of the hypothesis before D4 approval.")
+        missing = [] if request.current_evidence else [t(request.language, "d4_no_evidence", ncr=request.ncr["id"])]
+        missing.append(t(request.language, "d4_confirm"))
         return Proposal(
-            root_cause="Hypothesis (historical, not validated): " + top["confirmedRootCause"].rstrip(".")
-            + ", as recorded in " + ", ".join(cited) + ".",
+            root_cause=t(request.language, "d4_hypothesis", cause=top["confirmedRootCause"].rstrip("."), ids=", ".join(cited)),
             cited_ncr_ids=cited, confidence=confidence, missing_data=missing,
         )
 
@@ -114,14 +115,14 @@ class StrandsEngine:
         self.model_name = spec.model_name
         self._create_model = spec.create
 
-    def build_agent(self, toolbox: Toolbox) -> Any:
+    def build_agent(self, toolbox: Toolbox, language: str = "en") -> Any:
         from strands import Agent
 
-        return Agent(model=self._create_model(), tools=toolbox.strands_tools(), system_prompt=SYSTEM_PROMPT,
+        return Agent(model=self._create_model(), tools=toolbox.strands_tools(), system_prompt=SYSTEM_PROMPT + t(language, "model_language"),
                      callback_handler=None)
 
     def propose(self, request: EngineRequest, toolbox: Toolbox) -> Proposal:
-        agent = self.build_agent(toolbox)
+        agent = self.build_agent(toolbox, request.language)
         prompt = ("Current NCR " + request.ncr["id"] + " (" + request.ncr.get("area", "") + "):\n" + _query(request.ncr)
                   + "\nCurrent-lot evidence registered: " + (", ".join(e.id for e in request.current_evidence) or "none")
                   + sap_context_prompt(request.sap_context))

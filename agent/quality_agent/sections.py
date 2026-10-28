@@ -15,12 +15,12 @@ from typing import Any
 
 from .action_validator import validate_containment_actions, validate_prevention_actions
 from .corpus import Corpus
+from .language import t
 from .retrieval import Retriever
 from .service import RequestError
 from .tools import Toolbox
 
 ACTION = "draft_section"
-MISSING = "Evidence missing"
 D3_K = 3
 _DETECTION = re.compile(r"\b(?:inspection|inspected|x-ray|xray|patrol|test(?:ed|ing)?|audit|found by|detected|measured|gauge|"
                         r"customer|complaint|ditemukan|inspeksi|pengujian|terdeteksi)\b", re.IGNORECASE)
@@ -44,35 +44,30 @@ def _field(ncr: dict, key: str) -> str | None:
     return value.strip() if isinstance(value, str) and value.strip() else None
 
 
-def d2_lines(ncr: dict) -> list[tuple[str, str | None]]:
+def d2_lines(ncr: dict, language: str = "en") -> list[tuple[str, str | None]]:
     description = _field(ncr, "description") or ""
     what = " · ".join(v for v in (_field(ncr, "title"), _field(ncr, "category") and (_field(ncr, "category") + (" " + _field(ncr, "code") if _field(ncr, "code") else ""))) if v) or None
-    where = ", ".join(v for v in (_field(ncr, "area"), _field(ncr, "lot") and "lot " + _field(ncr, "lot")) if v) or None
+    where = ", ".join(v for v in (_field(ncr, "area"), _field(ncr, "lot") and t(language, "d2_lot", lot=_field(ncr, "lot"))) if v) or None
     quantity = _field(ncr, "quantity")
     of_total = _OF_TOTAL.search(description)
-    how_many = (quantity + " affected units" + (" of " + of_total.group(2) + " (as stated in the description)" if of_total and of_total.group(1) == quantity else "")) if quantity else None
-    return [
-        ("What", what),
-        ("Where", where),
-        ("When", "NCR recorded " + _field(ncr, "date") + "; time of occurrence not recorded" if _field(ncr, "date") else None),
-        ("Who", "Assigned engineer " + _field(ncr, "owner") if _field(ncr, "owner") else None),
-        ("Why it is a problem", _first(_PROBLEM, description)),
-        ("How it was detected", _first(_DETECTION, description)),
-        ("How many", how_many),
-    ]
+    how_many = (t(language, "d2_units", n=quantity) + (t(language, "d2_of", total=of_total.group(2)) if of_total and of_total.group(1) == quantity else "")) if quantity else None
+    values = [what, where, t(language, "d2_when", date=_field(ncr, "date")) if _field(ncr, "date") else None,
+              t(language, "d2_who", owner=_field(ncr, "owner")) if _field(ncr, "owner") else None,
+              _first(_PROBLEM, description), _first(_DETECTION, description), how_many]
+    return list(zip(t(language, "d2_keys"), values))
 
 
-def draft_d2(ncr: dict) -> dict[str, Any]:
-    lines = d2_lines(ncr)
+def draft_d2(ncr: dict, language: str = "en") -> dict[str, Any]:
+    lines = d2_lines(ncr, language)
     missing = [k for k, v in lines if v is None]
-    text = ("Agent draft (5W2H from the NCR fields, rule-based, no model, not validated):\n"
-            + "\n".join("- " + k + ": " + (v if v is not None else MISSING + ".") for k, v in lines))
+    text = (t(language, "d2_header") + "\n"
+            + "\n".join("- " + k + ": " + (v if v is not None else t(language, "d2_missing_value")) for k, v in lines))
     if missing:
-        text += "\nMissing data: " + ", ".join(missing) + " not recorded in the NCR."
+        text += "\n" + t(language, "d2_missing_line", keys=", ".join(missing))
     return {"lines": [{"key": k, "value": v} for k, v in lines], "missing": missing, "draft": text}
 
 
-def draft_d3(ncr: dict, corpus: Corpus, retriever: Retriever, evidence: list) -> dict[str, Any]:
+def draft_d3(ncr: dict, corpus: Corpus, retriever: Retriever, evidence: list, language: str = "en") -> dict[str, Any]:
     toolbox = Toolbox(corpus, retriever, k=D3_K)
     results = toolbox.search_similar_ncr((_field(ncr, "title") or "") + ". " + (_field(ncr, "description") or ""))["results"]
     actions: list[dict] = []
@@ -82,21 +77,20 @@ def draft_d3(ncr: dict, corpus: Corpus, retriever: Retriever, evidence: list) ->
         containment = (record.get("containment") or "").strip()
         if containment and containment not in seen:
             seen.add(containment)
-            actions.append({"action": containment.rstrip(".") + " (reuses the containment of " + r["id"] + ").", "cited_ncr_ids": [r["id"]], "evidence_ids": []})
+            actions.append({"action": t(language, "d3_reuse", containment=containment.rstrip("."), id=r["id"]), "cited_ncr_ids": [r["id"]], "evidence_ids": []})
     issues = validate_containment_actions(actions, toolbox.retrieved_ids, current_ncr_id=ncr["id"], evidence_registry=evidence + corpus.evidence_refs())
     failed = {i.index for i in issues}
     accepted = [a for n, a in enumerate(actions) if n not in failed]
     rejected = [{**a, "issues": [i.to_dict() for i in issues if i.index == n]} for n, a in enumerate(actions) if n in failed]
     if accepted:
-        text = ("Agent proposal (containment reused from retrieved cases, no model, not validated). Adapt lot numbers and quantities to "
-                + ncr["id"] + " before approval:\n" + "\n".join(str(n + 1) + ". " + a["action"] for n, a in enumerate(accepted)))
+        text = t(language, "d3_header", ncr=ncr["id"]) + "\n" + "\n".join(str(n + 1) + ". " + a["action"] for n, a in enumerate(accepted))
     else:
-        text = MISSING + ". No containment from a similar historical NCR applies; define containment for " + ncr["id"] + " from the current lot."
+        text = t(language, "d3_none", ncr=ncr["id"])
     return {"actions": accepted, "rejected": rejected, "draft": text,
             "retrieved": [{"id": i, "score": s, "title": (corpus.get(i) or {}).get("title", "")} for i, s in toolbox.retrieved.items()]}
 
 
-def draft_d7(ncr: dict, approved_d4: str, corpus: Corpus, retriever: Retriever, evidence: list) -> dict[str, Any]:
+def draft_d7(ncr: dict, approved_d4: str, corpus: Corpus, retriever: Retriever, evidence: list, language: str = "en") -> dict[str, Any]:
     """Prevention from recurrence: the root cause code of the NCRs the approved D4 cites (or of the most similar case)
     and the historical NCRs where that failure recurred, each prevention action citing them."""
     toolbox = Toolbox(corpus, retriever, k=D3_K)
@@ -114,20 +108,17 @@ def draft_d7(ncr: dict, approved_d4: str, corpus: Corpus, retriever: Retriever, 
         ids = [n["id"] for n in recurrences]
         latest = recurrences[0]
         actions = [
-            {"action": "Make the corrective action systemic across every " + latest["area"] + " cell and part number: " + latest["correctiveAction"].rstrip(".")
-                       + ". The failure recurred in " + ", ".join(ids) + ".", "cited_ncr_ids": ids, "evidence_ids": []},
-            {"action": "Add the failure mode (" + latest["confirmedRootCause"].rstrip(".") + ") to the " + latest["area"] + " PFMEA and control plan review, because it recurred in "
-                       + ", ".join(ids) + ".", "cited_ncr_ids": ids, "evidence_ids": []},
+            {"action": t(language, "d7_systemic", area=latest["area"], action=latest["correctiveAction"].rstrip("."), ids=", ".join(ids)), "cited_ncr_ids": ids, "evidence_ids": []},
+            {"action": t(language, "d7_fmea", cause=latest["confirmedRootCause"].rstrip("."), area=latest["area"], ids=", ".join(ids)), "cited_ncr_ids": ids, "evidence_ids": []},
         ]
     issues = validate_prevention_actions(actions, toolbox.retrieved_ids, current_ncr_id=ncr["id"], evidence_registry=evidence + corpus.evidence_refs())
     failed = {i.index for i in issues}
     accepted = [a for n, a in enumerate(actions) if n not in failed]
     rejected = [{**a, "issues": [i.to_dict() for i in issues if i.index == n]} for n, a in enumerate(actions) if n in failed]
     if accepted:
-        text = ("Agent proposal (prevention from recurring historical failures, no model, not validated) for " + ncr["id"] + ":\n"
-                + "\n".join(str(n + 1) + ". " + a["action"] for n, a in enumerate(accepted)))
+        text = t(language, "d7_header", ncr=ncr["id"]) + "\n" + "\n".join(str(n + 1) + ". " + a["action"] for n, a in enumerate(accepted))
     else:
-        text = MISSING + ". The failure did not recur among the historical NCRs, so no prevention is proposed from precedent. Define prevention for " + ncr["id"] + " from the D4 and D5 results."
+        text = t(language, "d7_none", ncr=ncr["id"])
     return {"actions": accepted, "rejected": rejected, "draft": text, "root_cause_code": code,
             "retrieved": [{"id": i, "score": s, "title": (corpus.get(i) or {}).get("title", "")} for i, s in toolbox.retrieved.items()]}
 
@@ -146,7 +137,7 @@ def draft_section(payload: Any, corpus: Corpus, retriever: Retriever) -> dict[st
         d4 = payload.get("approved_d4")
         if payload.get("d4_status") != "Approved" or not isinstance(d4, str) or not d4.strip():
             raise RequestError("D7 needs the approved D4 (d4_status \"Approved\" and approved_d4).")
-        body = draft_d7(ncr, d4, corpus, retriever, base.current_evidence)
+        body = draft_d7(ncr, d4, corpus, retriever, base.current_evidence, base.language)
     else:
-        body = draft_d2(ncr) if section == "D2" else draft_d3(ncr, corpus, retriever, base.current_evidence)
-    return {"status": "success", "task": ACTION, "section": section, "method": "rule-based, no model", "ncr_id": ncr["id"], **body}
+        body = draft_d2(ncr, base.language) if section == "D2" else draft_d3(ncr, corpus, retriever, base.current_evidence, base.language)
+    return {"status": "success", "task": ACTION, "section": section, "method": "rule-based, no model", "ncr_id": ncr["id"], "language": base.language, **body}

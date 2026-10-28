@@ -1,6 +1,6 @@
 // Typed client for the quality agent (agent/ in this repo). The UI uses it only when
 // NEXT_PUBLIC_AGENT_BACKEND=local; otherwise the local simulation stays in place.
-import type { AgentInfo, EvidenceRecord, NCR } from './types';
+import type { AgentInfo, DraftLanguage, EvidenceRecord, NCR } from './types';
 
 export type AgentBackend = 'simulated' | 'local';
 // Inlined at build time; must be referenced literally (see Next.js environment variable docs).
@@ -10,6 +10,7 @@ export interface AgentRequest {
     action: 'propose_root_cause';
     ncr: { id: string; title: string; description: string; area: string };
     current_evidence: { id: string; ncrId: string }[];
+    language?: DraftLanguage;
 }
 
 export interface AgentProposal {
@@ -53,11 +54,12 @@ export class AgentError extends Error {
     }
 }
 
-export function buildAgentRequest(ncr: NCR, registry: readonly EvidenceRecord[]): AgentRequest {
+export function buildAgentRequest(ncr: NCR, registry: readonly EvidenceRecord[], language: DraftLanguage = 'en'): AgentRequest {
     return {
         action: 'propose_root_cause',
         ncr: { id: ncr.id, title: ncr.title, description: ncr.description, area: ncr.area },
-        current_evidence: registry.filter(r => r.ncrId === ncr.id).map(r => ({ id: r.id, ncrId: r.ncrId }))
+        current_evidence: registry.filter(r => r.ncrId === ncr.id).map(r => ({ id: r.id, ncrId: r.ncrId })),
+        ...(language === 'id' ? { language } : {})
     };
 }
 
@@ -112,7 +114,14 @@ export function formatDuration(ms: number): string {
 }
 
 // D4 draft text from an agent response. Rejected proposals become an "evidence missing" draft.
-export function agentDraft(r: AgentResponse): string {
+export function agentDraft(r: AgentResponse, language: DraftLanguage = 'en'): string {
+    if (language === 'id') {
+        const kurang = r.proposal.missing_data.length ? ' Data yang kurang: ' + r.proposal.missing_data.join(' ') : '';
+        if (!r.accepted || !r.proposal.root_cause)
+            return 'Bukti belum tersedia. ' + (r.accepted ? 'Agen (' + agentLabel(r) + ') tidak menemukan hipotesis yang didukung.' : 'Usulan agen (' + agentLabel(r) + ') ditolak oleh pemeriksaan akar masalah: ' + r.validation.issues.map(i => i.code).join(', ') + '.') + kurang;
+        const status = r.proposal_status === 'unverified_hypothesis' ? ' Status: hipotesis belum terverifikasi, belum ada bukti current-lot yang terdaftar.' : '';
+        return 'Usulan agen (' + agentLabel(r) + ', belum divalidasi): ' + r.proposal.root_cause + ' Dikutip: ' + r.proposal.cited_ncr_ids.join(', ') + '. Keyakinan: ' + r.proposal.confidence + '.' + status + kurang;
+    }
     const missing = r.proposal.missing_data.length ? ' Missing data: ' + r.proposal.missing_data.join(' ') : '';
     if (!r.accepted || !r.proposal.root_cause)
         return 'Evidence missing. ' + (r.accepted ? 'The agent (' + agentLabel(r) + ') found no supported hypothesis.' : 'The agent proposal (' + agentLabel(r) + ') was rejected by the root cause check: ' + r.validation.issues.map(i => i.code).join(', ') + '.') + missing;

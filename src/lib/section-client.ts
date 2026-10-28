@@ -2,7 +2,7 @@
 // D2 restates the NCR in 5W2H form, D3 reuses the containment of retrieved cases, D7 proposes prevention from
 // historical NCRs where the failure recurred, each action with its citations.
 import { AgentError, formatDuration } from './agent-client';
-import type { EvidenceRecord, NCR, ReportSection } from './types';
+import type { DraftLanguage, EvidenceRecord, NCR, ReportSection } from './types';
 
 export type DraftSection = 'D2' | 'D3' | 'D7';
 
@@ -22,9 +22,9 @@ export interface SectionResponse {
 }
 
 // D7 also carries the approved D4, whose cited NCRs give the root cause code to look for recurrences of.
-export function buildSectionRequest(ncr: NCR, section: DraftSection, registry: readonly EvidenceRecord[], d4?: ReportSection) {
+export function buildSectionRequest(ncr: NCR, section: DraftSection, registry: readonly EvidenceRecord[], d4?: ReportSection, language: DraftLanguage = 'en') {
     const { id, title, description, area, code, category, severity, owner, date, quantity, lot } = ncr;
-    return { action: 'draft_section' as const, section, ncr: { id, title, description, area, code, category, severity, owner, date, quantity, lot }, current_evidence: registry.filter(r => r.ncrId === ncr.id).map(r => ({ id: r.id, ncrId: r.ncrId })), ...(section === 'D7' ? { d4_status: d4?.status ?? '', approved_d4: d4?.content ?? '' } : {}) };
+    return { action: 'draft_section' as const, section, ncr: { id, title, description, area, code, category, severity, owner, date, quantity, lot }, current_evidence: registry.filter(r => r.ncrId === ncr.id).map(r => ({ id: r.id, ncrId: r.ncrId })), ...(section === 'D7' ? { d4_status: d4?.status ?? '', approved_d4: d4?.content ?? '' } : {}), ...(language === 'id' ? { language } : {}) };
 }
 
 export function parseSectionResponse(json: unknown, section: DraftSection): SectionResponse {
@@ -38,10 +38,10 @@ export function parseSectionResponse(json: unknown, section: DraftSection): Sect
     return r;
 }
 
-export async function requestSectionDraft(ncr: NCR, section: DraftSection, registry: readonly EvidenceRecord[], fetchImpl: typeof fetch = fetch, d4?: ReportSection): Promise<SectionResponse> {
+export async function requestSectionDraft(ncr: NCR, section: DraftSection, registry: readonly EvidenceRecord[], fetchImpl: typeof fetch = fetch, d4?: ReportSection, language: DraftLanguage = 'en'): Promise<SectionResponse> {
     let res: Response;
     try {
-        res = await fetchImpl('/api/agent/section', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildSectionRequest(ncr, section, registry, d4)) });
+        res = await fetchImpl('/api/agent/section', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(buildSectionRequest(ncr, section, registry, d4, language)) });
     }
     catch {
         throw new AgentError('Could not reach the app API.');

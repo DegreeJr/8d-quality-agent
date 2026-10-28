@@ -406,6 +406,50 @@
       "expectedIndexes": [
         1
       ]
+    },
+    {
+      "name": "pass: Indonesian agent draft action reusing a D4-cited NCR",
+      "approvedD4": "Hipotesis (historis, belum divalidasi): Vent channel blockage confirmed by tooling inspection, seperti tercatat di NCR-2025-084, NCR-2023-002, NCR-2023-007.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2023-002",
+        "NCR-2023-007"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "demo",
+      "actions": [
+        {
+          "action": "Clean vent channels every 400 cycles; add vent inspection to setup checklist (memakai ulang tindakan korektif NCR-2025-084).",
+          "cited_ncr_ids": [
+            "NCR-2025-084"
+          ],
+          "evidence_ids": []
+        }
+      ],
+      "expectedCodes": []
+    },
+    {
+      "name": "fail: Indonesian generic action against an Indonesian D4",
+      "approvedD4": "Hipotesis (historis, belum divalidasi): Vent channel blockage confirmed by tooling inspection, seperti tercatat di NCR-2025-084, NCR-2023-002, NCR-2023-007.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2023-002",
+        "NCR-2023-007"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "demo",
+      "actions": [
+        {
+          "action": "Operator harus lebih teliti saat setup die.",
+          "cited_ncr_ids": [
+            "NCR-2025-084"
+          ],
+          "evidence_ids": []
+        }
+      ],
+      "expectedCodes": [
+        "GENERIC_ACTION_UNSUPPORTED"
+      ]
     }
   ]
 }

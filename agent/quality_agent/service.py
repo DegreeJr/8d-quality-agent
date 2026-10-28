@@ -8,13 +8,13 @@ from typing import Any
 
 from .corpus import Corpus
 from .engines import Engine, EngineRequest, Proposal
+from .language import LanguageError, parse_language, t
 from .retrieval import Retriever
 from .sap_hub import SapHubClient
 from .tools import Toolbox
 from .validator import UNVERIFIED, EvidenceRef, validate_root_cause
 
 _NCR_ID = re.compile(r"^NCR-\d{4}-\d{3}$", re.IGNORECASE)
-UNVERIFIED_MISSING_DATA = "No current-lot evidence is registered for {}; the hypothesis stays unverified until it is."
 
 
 class RequestError(ValueError):
@@ -40,7 +40,11 @@ def parse_request(payload: Any) -> EngineRequest:
         raise RequestError("current_evidence must be a list of {id, ncrId}.")
     # Only evidence that the caller says belongs to this NCR is considered current-lot evidence.
     refs = [EvidenceRef(e["id"].upper(), e["ncrId"].upper()) for e in evidence if e["ncrId"].upper() == ncr_id]
-    return EngineRequest(ncr={**{k: ncr.get(k, "") for k in ("title", "description", "area")}, "id": ncr_id}, current_evidence=refs)
+    try:
+        language = parse_language(payload)
+    except LanguageError as e:
+        raise RequestError(str(e)) from None
+    return EngineRequest(ncr={**{k: ncr.get(k, "") for k in ("title", "description", "area")}, "id": ncr_id}, current_evidence=refs, language=language)
 
 
 def proposal_text(proposal: Proposal) -> str:
@@ -62,7 +66,7 @@ def propose_root_cause(payload: Any, engine: Engine, corpus: Corpus, retriever: 
     ncr_id = request.ncr["id"]
     # Rule D: without current-lot evidence a hypothesis is unverified and must say what data is missing.
     if raw.root_cause and not raw.missing_data and not any(e.ncr_id == ncr_id for e in request.current_evidence):
-        raw = raw.model_copy(update={"missing_data": [UNVERIFIED_MISSING_DATA.format(ncr_id)]})
+        raw = raw.model_copy(update={"missing_data": [t(request.language, "d4_unverified", ncr=ncr_id)]})
     # Rule A uses the ids the tools returned in this invocation, not ids the model claims to have retrieved.
     # The registry is the caller's current-lot evidence plus the corpus records; SAP sandbox context is never part of it.
     validation = validate_root_cause(

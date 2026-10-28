@@ -4,6 +4,7 @@
   "section": "D3",
   "method": "rule-based, no model",
   "ncr_id": "NCR-2026-104",
+  "language": "en",
   "actions": [
     {
       "action": "Lot LOT-DC-2507 on hold; 100% X-ray of stock (reuses the containment of NCR-2025-084).",

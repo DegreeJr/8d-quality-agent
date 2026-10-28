@@ -2,7 +2,7 @@
 // Requested only after D4 is approved; the result is a draft the engineer edits and approves.
 import { AgentError, agentLabel, formatDuration } from './agent-client';
 import { actionsFromText, validateCorrectiveActions, type ActionCheck, type CorrectiveAction } from './action-validator';
-import type { AgentInfo, AppState, EvidenceRecord, NCR, ReportSection } from './types';
+import type { AgentInfo, AppState, DraftLanguage, EvidenceRecord, NCR, ReportSection } from './types';
 
 export interface CorrectiveResponse extends AgentInfo {
     status: 'success';
@@ -21,10 +21,11 @@ export interface CorrectiveRequest {
     approved_d4: string;
     ncr: { id: string; title: string; description: string; area: string };
     current_evidence: { id: string; ncrId: string }[];
+    language?: DraftLanguage;
 }
 
-export function buildCorrectiveRequest(ncr: NCR, d4: ReportSection, registry: readonly EvidenceRecord[]): CorrectiveRequest {
-    return { action: 'propose_corrective_actions', d4_status: d4.status, approved_d4: d4.content, ncr: { id: ncr.id, title: ncr.title, description: ncr.description, area: ncr.area }, current_evidence: registry.filter(r => r.ncrId === ncr.id).map(r => ({ id: r.id, ncrId: r.ncrId })) };
+export function buildCorrectiveRequest(ncr: NCR, d4: ReportSection, registry: readonly EvidenceRecord[], language: DraftLanguage = 'en'): CorrectiveRequest {
+    return { action: 'propose_corrective_actions', d4_status: d4.status, approved_d4: d4.content, ncr: { id: ncr.id, title: ncr.title, description: ncr.description, area: ncr.area }, current_evidence: registry.filter(r => r.ncrId === ncr.id).map(r => ({ id: r.id, ncrId: r.ncrId })), ...(language === 'id' ? { language } : {}) };
 }
 
 const isAction = (a: unknown): a is CorrectiveAction => !!a && typeof (a as CorrectiveAction).action === 'string' && Array.isArray((a as CorrectiveAction).cited_ncr_ids) && Array.isArray((a as CorrectiveAction).evidence_ids);
@@ -51,18 +52,19 @@ export async function proposeCorrectiveActions(request: CorrectiveRequest, fetch
     return parseCorrectiveResponse(await res.json().catch(() => null));
 }
 
-function citation(a: CorrectiveAction) {
-    const parts = [a.cited_ncr_ids.length && 'cited ' + a.cited_ncr_ids.join(', '), a.evidence_ids.length && 'evidence ' + a.evidence_ids.join(', ')].filter(Boolean);
+function citation(a: CorrectiveAction, language: DraftLanguage) {
+    const parts = [a.cited_ncr_ids.length && (language === 'id' ? 'dikutip ' : 'cited ') + a.cited_ncr_ids.join(', '), a.evidence_ids.length && (language === 'id' ? 'bukti ' : 'evidence ') + a.evidence_ids.join(', ')].filter(Boolean);
     return parts.length ? ' [' + parts.join('; ') + ']' : '';
 }
 
 // D5 draft text: one numbered line per accepted action, so the D5 check can read it back.
-export function correctiveDraft(r: CorrectiveResponse): string {
-    const missing = r.missing_data.length ? '\nMissing data: ' + r.missing_data.join(' ') : '';
-    const withheld = r.rejected.length ? '\nWithheld by the action check: ' + r.rejected.length + ' (' + [...new Set(r.rejected.flatMap(a => a.issues.map(i => i.code)))].join(', ') + ').' : '';
+export function correctiveDraft(r: CorrectiveResponse, language: DraftLanguage = 'en'): string {
+    const id = language === 'id';
+    const missing = r.missing_data.length ? (id ? '\nData yang kurang: ' : '\nMissing data: ') + r.missing_data.join(' ') : '';
+    const withheld = r.rejected.length ? (id ? '\nDitahan oleh pemeriksaan tindakan: ' : '\nWithheld by the action check: ') + r.rejected.length + ' (' + [...new Set(r.rejected.flatMap(a => a.issues.map(i => i.code)))].join(', ') + ').' : '';
     if (!r.actions.length)
-        return 'Evidence missing. The agent (' + agentLabel(r) + ') proposed no corrective action that passed the action check.' + withheld + missing;
-    return 'Agent proposal (' + agentLabel(r) + ', not validated): corrective actions for the approved D4.\n' + r.actions.map((a, i) => (i + 1) + '. ' + a.action + citation(a)).join('\n') + withheld + missing;
+        return (id ? 'Bukti belum tersedia. Agen (' + agentLabel(r) + ') tidak mengusulkan tindakan korektif yang lolos pemeriksaan tindakan.' : 'Evidence missing. The agent (' + agentLabel(r) + ') proposed no corrective action that passed the action check.') + withheld + missing;
+    return (id ? 'Usulan agen (' + agentLabel(r) + ', belum divalidasi): tindakan korektif untuk D4 yang disetujui.\n' : 'Agent proposal (' + agentLabel(r) + ', not validated): corrective actions for the approved D4.\n') + r.actions.map((a, i) => (i + 1) + '. ' + a.action + citation(a, language)).join('\n') + withheld + missing;
 }
 
 export function correctiveAuditAction(r: CorrectiveResponse, ms: number): string {

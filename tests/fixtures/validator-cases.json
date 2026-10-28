@@ -1,5 +1,5 @@
 {
-  "description": "Shared validator cases. Read by tests/validator.test.ts (TypeScript) and agent/tests/test_validator.py (Python). expectedCodes lists issue codes in order; messageIncludes are substrings of the joined issue messages; expectedStatus, when present, is the Rule D hypothesis status; missingData, when present, is passed as the proposal's missing-data list. Rule B ignores generic phrases that are themselves rejected or negated (B-context cases); B-smuggle cases must still fail. Rule E (ROOT_CAUSE_UNCITED) and Rule D's ROOT_CAUSE_STATED_AS_FACT cases include the SAP AI Core outputs recorded in VERIFICATION.md, which must keep passing. Rule F cases (prefix F:) cover SAP sandbox sample data used as evidence. Rule G cases (prefix G:) cover an uploaded photo or document used as evidence.",
+  "description": "Shared validator cases. Read by tests/validator.test.ts (TypeScript) and agent/tests/test_validator.py (Python). expectedCodes lists issue codes in order; messageIncludes are substrings of the joined issue messages; expectedStatus, when present, is the Rule D hypothesis status; missingData, when present, is passed as the proposal's missing-data list. Rule B ignores generic phrases that are themselves rejected or negated (B-context cases); B-smuggle cases must still fail. Rule E (ROOT_CAUSE_UNCITED) and Rule D's ROOT_CAUSE_STATED_AS_FACT cases include the SAP AI Core outputs recorded in VERIFICATION.md, which must keep passing. Rule F cases (prefix F:) cover SAP sandbox sample data used as evidence. Rule G cases (prefix G:) cover an uploaded photo or document used as evidence. ID-draft cases cover the Indonesian wording of agent drafts (Draft language: Bahasa Indonesia).",
   "registries": {
     "demo": [
       {
@@ -1350,6 +1350,86 @@
       "registry": "demo",
       "expectedCodes": [
         "UPLOAD_AS_EVIDENCE"
+      ],
+      "expectedStatus": "unverified_hypothesis"
+    },
+    {
+      "name": "ID-draft: Indonesian agent D4 draft without current-lot evidence passes as an unverified hypothesis",
+      "text": "Usulan agen (local agent, mock mode without a model, belum divalidasi): Hipotesis (historis, belum divalidasi): Vent channel blockage confirmed by tooling inspection, seperti tercatat di NCR-2025-084, NCR-2023-002, NCR-2023-007. Dikutip: NCR-2025-084, NCR-2023-002, NCR-2023-007. Keyakinan: high. Status: hipotesis belum terverifikasi, belum ada bukti current-lot yang terdaftar. Data yang kurang: Belum ada bukti current-lot yang terdaftar untuk NCR-2026-104. Konfirmasi current-lot (uji terkendali atau inspeksi) atas hipotesis sebelum persetujuan D4.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2023-002",
+        "NCR-2023-007"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "none_for_104",
+      "expectedCodes": [],
+      "expectedStatus": "unverified_hypothesis"
+    },
+    {
+      "name": "ID-draft: Indonesian agent D4 draft with TR-104 registered",
+      "text": "Usulan agen (local agent, mock mode without a model, belum divalidasi): Hipotesis (historis, belum divalidasi): Vent channel blockage confirmed by tooling inspection, seperti tercatat di NCR-2025-084, NCR-2023-002, NCR-2023-007. Dikutip: NCR-2025-084, NCR-2023-002, NCR-2023-007. Keyakinan: high. Status: hipotesis belum terverifikasi, belum ada bukti current-lot yang terdaftar. Data yang kurang: Belum ada bukti current-lot yang terdaftar untuk NCR-2026-104. Konfirmasi current-lot (uji terkendali atau inspeksi) atas hipotesis sebelum persetujuan D4.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2023-002",
+        "NCR-2023-007"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "demo",
+      "expectedCodes": [],
+      "expectedStatus": "evidence_registered"
+    },
+    {
+      "name": "ID-draft: Indonesian evidence-missing draft with nothing retrieved (Rule C)",
+      "text": "Bukti belum tersedia. Agen (local agent, mock mode without a model) tidak menemukan hipotesis yang didukung. Data yang kurang: Bukti belum tersedia: tidak ada NCR historis serupa yang ditemukan.",
+      "retrieved": [],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "none_for_104",
+      "expectedCodes": [],
+      "expectedStatus": "unverified_hypothesis"
+    },
+    {
+      "name": "ID-draft: Indonesian root cause stated as fact without evidence (Rule D)",
+      "text": "Akar masalah adalah vent tersumbat seperti NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2023-002",
+        "NCR-2023-007"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "none_for_104",
+      "expectedCodes": [
+        "ROOT_CAUSE_STATED_AS_FACT"
+      ],
+      "expectedStatus": "unverified_hypothesis"
+    },
+    {
+      "name": "ID-draft: Indonesian generic claim (Rule B)",
+      "text": "Hipotesis: kesalahan operator seperti NCR-2025-084.",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2023-002",
+        "NCR-2023-007"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "none_for_104",
+      "expectedCodes": [
+        "GENERIC_CLAIM_UNSUPPORTED"
+      ],
+      "expectedStatus": "unverified_hypothesis"
+    },
+    {
+      "name": "ID-draft: Indonesian root cause claimed confirmed without evidence (Rule D)",
+      "text": "Akar masalah terkonfirmasi: vent tersumbat (NCR-2025-084).",
+      "retrieved": [
+        "NCR-2025-084",
+        "NCR-2023-002",
+        "NCR-2023-007"
+      ],
+      "currentNcrId": "NCR-2026-104",
+      "registry": "none_for_104",
+      "expectedCodes": [
+        "ROOT_CAUSE_CLAIMED_CONFIRMED"
       ],
       "expectedStatus": "unverified_hypothesis"
     }

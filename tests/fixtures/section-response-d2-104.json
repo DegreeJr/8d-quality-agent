@@ -4,6 +4,7 @@
   "section": "D2",
   "method": "rule-based, no model",
   "ncr_id": "NCR-2026-104",
+  "language": "en",
   "lines": [
     {
       "key": "What",

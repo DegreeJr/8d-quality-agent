@@ -1,7 +1,7 @@
 'use client';
 /* eslint-disable react-hooks/set-state-in-effect -- Hydrate browser-only storage and URL parameters after mount. */
 import { createContext, useContext, useEffect, useState } from 'react';
-import { AppState, NCR, CAPA, EvidenceRecord } from '@/lib/types';
+import { AppState, NCR, CAPA, DraftLanguage, EvidenceRecord } from '@/lib/types';
 import { createInitialState, sectionDraft } from '@/lib/data';
 import { acceptanceEvent, suggestionEvent, withClassification, type ClassificationFields, type ClassificationResponse } from '@/lib/classification';
 import { intakeEvents, type DocumentIntake, type PhotoReading } from '@/lib/intake';
@@ -24,6 +24,7 @@ interface Store {
     // D1 routing, D6 plan and D8 closure checklist: fixed rules, no model, in every backend.
     generateRuleBased: (id: string, step: number) => void;
     acceptRouting: (id: string, owner: string) => void;
+    setDraftLanguage: (language: DraftLanguage) => void;
     review: (id: string, step: number, approve: boolean, note: string) => void;
     logSystem: (id: string, action: string) => void;
     // Returns an error message, or null when the evidence was registered.
@@ -37,10 +38,10 @@ interface Store {
 }
 // Agent helpers live outside the component so the React Compiler can still analyze it.
 // ms is the measured round trip of the agent call, as seen by the browser.
-async function requestAgentProposal(n: NCR, registry: EvidenceRecord[]): Promise<{ ok: true; response: AgentResponse; ms: number } | { ok: false; error: string; ms: number }> {
+async function requestAgentProposal(n: NCR, registry: EvidenceRecord[], language: DraftLanguage): Promise<{ ok: true; response: AgentResponse; ms: number } | { ok: false; error: string; ms: number }> {
     const start = performance.now();
     try {
-        const response = await proposeRootCause(buildAgentRequest(n, registry));
+        const response = await proposeRootCause(buildAgentRequest(n, registry, language));
         return { ok: true, response, ms: performance.now() - start };
     }
     catch (e) {
@@ -93,13 +94,14 @@ export function AppProvider({ children }: {
     const event = (id: string, action: string, kind: 'AI' | 'Human' | 'System' = 'Human', actor?: string) => ({ id: crypto.randomUUID(), ncrId: id, actor: actor ? actor : kind === 'AI' ? 'Quality agent (simulated)' : kind === 'System' ? 'Root cause validator' : 'Sarah Chen', kind, action, timestamp: new Date().toISOString() });
     const validationEvents = (s: AppState, id: string, step: number, content: string, trigger: 'generated' | 'saved') => { if (step !== 3)
         return []; const check = rootCauseCheck(s, id, content); return check.ok ? [] : [event(id, rootCauseAuditAction(step, trigger, check.issues), 'System')]; };
+    const language: DraftLanguage = state.draftLanguage ?? 'en';
     // D5 from the agent: only reachable when D4 is approved (canAccess), and the request carries the D4 status.
     const generateActionsWithAgent = async (n: NCR) => {
         const report = state.reports.find(r => r.ncrId === n.id)!;
         const start = performance.now();
         let r: CorrectiveResponse;
         try {
-            r = await proposeCorrectiveActions(buildCorrectiveRequest(n, report.sections[3], registryOf(state)));
+            r = await proposeCorrectiveActions(buildCorrectiveRequest(n, report.sections[3], registryOf(state), language));
         }
         catch (e) {
             const message = (e as Error).message;
@@ -108,7 +110,7 @@ export function AppProvider({ children }: {
             return false;
         }
         const ms = performance.now() - start;
-        const draft = correctiveDraft(r);
+        const draft = correctiveDraft(r, language);
         setState(s => {
             const actor = 'Quality agent (' + agentLabel(r) + ')';
             const events = [event(n.id, correctiveAuditAction(r, ms), 'AI', actor)];
@@ -125,7 +127,7 @@ export function AppProvider({ children }: {
         const start = performance.now();
         let r: SectionResponse;
         try {
-            r = await requestSectionDraft(n, section, registryOf(state), fetch, state.reports.find(x => x.ncrId === n.id)?.sections[3]);
+            r = await requestSectionDraft(n, section, registryOf(state), fetch, state.reports.find(x => x.ncrId === n.id)?.sections[3], language);
         }
         catch (e) {
             const message = (e as Error).message;
@@ -139,6 +141,7 @@ export function AppProvider({ children }: {
         return true;
     };
     const store: Store = {
+        setDraftLanguage: l => setState(s => ({ ...s, draftLanguage: l })),
         generateRuleBased: (id, step) => setState(s => { const n = s.ncrs.find(x => x.id === id); if (!n || ![0, 5, 7].includes(step) || !canAccess(s, id, step))
             return s; const today = todayIso(); const draft = step === 0 ? routingDraft(proposeRouting(s, n)) : step === 5 ? d6Plan(s, id, today) : d8Draft(s, id, today); const actor = step === 0 ? ROUTING_ACTOR : step === 5 ? 'D6 planner (rule-based)' : 'Closure checklist (rule-based)'; return { ...withSectionDraft(s, id, step, draft), audit: [event(id, 'Generated D' + (step + 1) + ' draft by fixed rules, no model.', 'System', actor), ...s.audit] }; }),
         acceptRouting: (id, owner) => { setState(s => { const n = s.ncrs.find(x => x.id === id); return n ? acceptRouting(s, id, proposeRouting(s, n), owner, 'Sarah Chen', new Date().toISOString()) : s; }); setNotice('Routing recorded for ' + id + '. Complete D1 when the team is confirmed.'); }, state, ready, notice, notify: setNotice,
@@ -156,14 +159,14 @@ export function AppProvider({ children }: {
                 return generateActionsWithAgent(n);
             if (step === 1 || step === 2 || step === 6)
                 return generateSectionWithAgent(n, step);
-            const result = await requestAgentProposal(n, registryOf(state));
+            const result = await requestAgentProposal(n, registryOf(state), language);
             if (!result.ok) {
                 setState(s => withAgentFailure(s, event(id, 'Agent call failed after ' + formatDuration(result.ms) + ': ' + result.error, 'System')));
                 setNotice('Agent unavailable: ' + result.error);
                 return false;
             }
             const r = result.response;
-            const draft = agentDraft(r);
+            const draft = agentDraft(r, language);
             setState(s => {
                 const next = withAgentDraft(s, id, step, draft, r);
                 const actor = 'Quality agent (' + agentLabel(r) + ')';

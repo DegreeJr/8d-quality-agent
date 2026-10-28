@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from .action_validator import validate_corrective_actions
 from .corpus import Corpus
+from .language import t
 from .retrieval import Retriever
 from .service import RequestError, parse_request
 from .tools import Toolbox
@@ -41,6 +42,7 @@ class ActionRequest:
     ncr: dict[str, str]
     approved_d4: str
     current_evidence: list[EvidenceRef] = field(default_factory=list)
+    language: str = "en"
 
 
 def parse_action_request(payload: Any) -> ActionRequest:
@@ -53,14 +55,14 @@ def parse_action_request(payload: Any) -> ActionRequest:
         raise RequestError("approved_d4 must be the approved D4 text.")
     # The NCR and evidence fields are checked like a D4 request.
     base = parse_request({**payload, "action": "propose_root_cause"})
-    return ActionRequest(ncr=base.ncr, approved_d4=d4.strip(), current_evidence=base.current_evidence)
+    return ActionRequest(ncr=base.ncr, approved_d4=d4.strip(), current_evidence=base.current_evidence, language=base.language)
 
 
 def mock_plan(request: ActionRequest, candidates: list[dict]) -> ActionPlan:
     """Reuses the corrective actions of retrieved cases that share the root cause code of the case the D4 cites first
     (or of the top retrieved case), without a model."""
     if not candidates:
-        return ActionPlan(missing_data=["Evidence missing: no similar historical NCR was retrieved, so no corrective action can be reused."])
+        return ActionPlan(missing_data=[t(request.language, "d5_none")])
     cited = [c for i in _NCR_ID.findall(request.approved_d4) for c in candidates if c["id"] == i.upper()]
     code = (cited or candidates)[0]["rootCauseCode"]
     actions: list[PlannedAction] = []
@@ -69,10 +71,10 @@ def mock_plan(request: ActionRequest, candidates: list[dict]) -> ActionPlan:
         if c["rootCauseCode"] != code or c["correctiveAction"] in seen:
             continue
         seen.add(c["correctiveAction"])
-        actions.append(PlannedAction(action=c["correctiveAction"].rstrip(".") + " (reuses the corrective action of " + c["id"] + ").", cited_ncr_ids=[c["id"]]))
-    missing = ["Verification of each action on the next lots before D6."]
+        actions.append(PlannedAction(action=t(request.language, "d5_reuse", action=c["correctiveAction"].rstrip("."), id=c["id"]), cited_ncr_ids=[c["id"]]))
+    missing = [t(request.language, "d5_verify")]
     if not request.current_evidence:
-        missing.insert(0, "No current-lot evidence is registered for " + request.ncr["id"] + ".")
+        missing.insert(0, t(request.language, "d4_no_evidence", ncr=request.ncr["id"]))
     return ActionPlan(actions=actions[:MAX_ACTIONS], missing_data=missing)
 
 
@@ -89,7 +91,7 @@ Rules:
 def strands_plan(engine: Any, request: ActionRequest, toolbox: Toolbox, candidates: list[dict]) -> ActionPlan:
     from strands import Agent
 
-    agent = Agent(model=engine._create_model(), tools=toolbox.strands_tools(), system_prompt=ACTION_PROMPT, callback_handler=None)
+    agent = Agent(model=engine._create_model(), tools=toolbox.strands_tools(), system_prompt=ACTION_PROMPT + t(request.language, "model_language"), callback_handler=None)
     lines = "\n".join("- " + c["id"] + " (root cause: " + c["confirmedRootCause"] + "): corrective action: " + c["correctiveAction"] for c in candidates)
     prompt = ("Current NCR " + request.ncr["id"] + " (" + request.ncr.get("area", "") + "): " + request.ncr.get("title", "")
               + "\nApproved D4: " + request.approved_d4
@@ -122,7 +124,7 @@ def propose_corrective_actions(payload: Any, engine: Any, corpus: Corpus, retrie
     rejected = [{**a, "issues": [i.to_dict() for i in issues if i.index == n]} for n, a in enumerate(actions) if n in failed]
     missing = list(plan.missing_data)
     if not accepted:
-        missing.append("Evidence missing: no proposed corrective action passed the action check.")
+        missing.append(t(request.language, "d5_withheld_all"))
     return {
         "status": "success",
         "task": ACTION,
