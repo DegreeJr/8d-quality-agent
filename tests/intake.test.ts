@@ -44,7 +44,7 @@ test('upload proposals are AI events, the confirmation a Human event, and neithe
     assert.match(events[0].action, /Uploads are attachments, not current-lot evidence\./);
     assert.match(events[1].action, /^Agent reading of the photo, not validated \(boss\.png\): Porosity cluster/);
     assert.equal(events[2].action, 'Proposed NCR fields from ncr-sample.txt: title Porosity in aluminum motor housing, lot LOT-DC-2411, quantity 48, area Die casting.');
-    assert.deepEqual(events.map(eventBadge), ['Human', 'Agent', 'Agent']);
+    assert.deepEqual(events.map(eventBadge), ['Human', 'Agent', 'Rule-based']);
     assert.deepEqual(intakeEvents('NCR-2026-105', {}, 'Sarah Chen', 'now'), []);
     // An NCR with attachments is still locked at D4 and its registry is unchanged.
     const s = createInitialState();

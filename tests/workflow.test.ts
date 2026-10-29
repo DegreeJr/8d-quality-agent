@@ -4,6 +4,9 @@ import { createInitialState, sectionDraft } from '../src/lib/data';
 import { approvalsResetBy, canAccess, d4EvidenceBanner, ESCALATION_ACTOR, eventBadge, evidenceFor, isD4Locked, isOverdue, noHistoricalEvidenceText, registerEvidence, registryOf, reviewSection, RootCauseRejectedError, rootCauseCheck, withAgentDraft, withAgentFailure, withEscalations } from '../src/lib/workflow';
 import { buildAgentRequest, type AgentResponse } from '../src/lib/agent-client';
 import type { AuditEvent } from '../src/lib/types';
+import { CLASSIFICATION_ACTOR } from '../src/lib/classification';
+import { DOCUMENT_ACTOR, PHOTO_ACTOR } from '../src/lib/intake';
+import { ROUTING_ACTOR } from '../src/lib/skeleton';
 test('D4 blocks D5 and D6 until a human approves', () => { const s = createInitialState(); assert.equal(canAccess(s, 'NCR-2026-104', 3), true); assert.equal(canAccess(s, 'NCR-2026-104', 4), false); assert.throws(() => reviewSection(s, 'NCR-2026-104', 3, true, ''), /validation evidence/); const reviewed = reviewSection(s, 'NCR-2026-104', 3, true, 'TR-104: current-lot controlled trial reviewed.'); assert.equal(canAccess(reviewed, 'NCR-2026-104', 4), true); assert.equal(canAccess(reviewed, 'NCR-2026-104', 5), false); });
 test('D5 also requires approval and validation notes', () => { let s = reviewSection(createInitialState(), 'NCR-2026-104', 3, true, 'D4 trial reviewed'); s.reports[0].sections[4] = { content: 'Validated corrective action plan', status: 'Draft' }; assert.throws(() => reviewSection(s, 'NCR-2026-104', 4, true, '')); s = reviewSection(s, 'NCR-2026-104', 4, true, 'Pilot plan and acceptance criteria reviewed'); assert.equal(canAccess(s, 'NCR-2026-104', 5), true); });
 test('rejecting D4 revokes downstream approval', () => { let s = reviewSection(createInitialState(), 'NCR-2026-104', 3, true, 'Trial reviewed'); s.reports[0].sections[4] = { content: 'Corrective plan', status: 'Approved' }; s = reviewSection(s, 'NCR-2026-104', 3, false, 'Need repeat trial'); assert.equal(s.reports[0].sections[4].status, 'Draft'); assert.equal(canAccess(s, 'NCR-2026-104', 4), false); });
@@ -151,6 +154,17 @@ test('audit badges come from the actor: simulated actors stay Simulated AI, agen
     assert.equal(eventBadge({ kind: 'AI', actor: 'Quality agent (simulated)' }), 'Simulated AI');
     assert.equal(eventBadge({ kind: 'AI', actor: 'Quality agent (SAP AI Core (gpt-5.4))' }), 'Agent');
     assert.equal(eventBadge({ kind: 'AI', actor: 'Quality agent (local agent, mock mode without a model)' }), 'Agent');
-    assert.equal(eventBadge({ kind: 'System', actor: ESCALATION_ACTOR }), 'System');
+    assert.equal(eventBadge({ kind: 'System', actor: 'Root cause validator' }), 'System');
+    assert.equal(eventBadge({ kind: 'Human', actor: 'Sarah Chen' }), 'Human');
+});
+
+test('rule-based and no-model actors show Rule-based, never Agent; model calls keep Agent', () => {
+    for (const actor of ['Quality agent (rule-based D2 draft, no model)', 'Quality agent (rule-based D3 draft, no model)', 'Quality agent (rule-based D7 draft, no model)', CLASSIFICATION_ACTOR, DOCUMENT_ACTOR])
+        assert.equal(eventBadge({ kind: 'AI', actor }), 'Rule-based', actor);
+    for (const actor of [ROUTING_ACTOR, 'D6 planner (rule-based)', 'Closure checklist (rule-based)', ESCALATION_ACTOR])
+        assert.equal(eventBadge({ kind: 'System', actor }), 'Rule-based', actor);
+    for (const actor of ['Quality agent (SAP AI Core (gpt-5.4))', 'Quality agent (local agent, mock mode without a model)', PHOTO_ACTOR])
+        assert.equal(eventBadge({ kind: 'AI', actor }), 'Agent', actor);
+    assert.equal(eventBadge({ kind: 'AI', actor: 'Classification agent (simulated)' }), 'Simulated AI');
     assert.equal(eventBadge({ kind: 'Human', actor: 'Sarah Chen' }), 'Human');
 });

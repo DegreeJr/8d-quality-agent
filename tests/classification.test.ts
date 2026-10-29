@@ -46,7 +46,7 @@ test('suggestion is an AI event by the classification agent; only acceptance cha
     const ai = suggestionEvent('NCR-2026-100', contract, '2026-10-28T08:00:00Z');
     assert.equal(ai.kind, 'AI');
     assert.equal(ai.actor, CLASSIFICATION_ACTOR);
-    assert.equal(eventBadge(ai), 'Agent');
+    assert.equal(eventBadge(ai), 'Rule-based');
     assert.match(ai.action, /^Suggested classification by retrieval vote over 5 similar cases: Porosity · POR-01 · Major · Die casting\. Cited: NCR-/);
     const chosen = proposedFields(contract, before);
     const next = withClassification(s, 'NCR-2026-100', contract, chosen, 'Sarah Chen', '2026-10-28T08:01:00Z');

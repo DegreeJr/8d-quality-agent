@@ -11,12 +11,20 @@ export function registryOf(state: AppState): EvidenceRecord[] {
 export function evidenceFor(state: AppState, id: string): EvidenceRecord[] {
     return registryOf(state).filter(r => r.ncrId === id);
 }
-// Badge for an audit event. AI events from simulated actors ("... (simulated)") stay "Simulated AI"; AI events from
-// the local or SAP agent show "Agent". Human and System events keep their kind.
+// Badge for an audit event. AI events from simulated actors ("... (simulated)") stay "Simulated AI". AI and System
+// events whose actor works without a model (rule-based, "no model", the classification retrieval vote) show
+// "Rule-based"; other AI events called the model and show "Agent". Human events and other System events keep their kind.
 export function isSimulatedActor(actor: string): boolean {
     return /\(simulated\)$/i.test(actor.trim());
 }
+export function isRuleBasedActor(actor: string): boolean {
+    return /rule-based|no model|retrieval vote/i.test(actor);
+}
 export function eventBadge(a: Pick<AuditEvent, 'actor' | 'kind'>): string {
+    if (a.kind === 'Human')
+        return a.kind;
+    if (isRuleBasedActor(a.actor))
+        return 'Rule-based';
     return a.kind !== 'AI' ? a.kind : isSimulatedActor(a.actor) ? 'Simulated AI' : 'Agent';
 }
 // Yellow D4 banner text, or null when historical references and current-lot evidence are both present.

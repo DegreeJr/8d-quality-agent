@@ -34,7 +34,7 @@ test('agent D2 and D3 drafts are labelled rule-based, cite their cases, and repl
     const after = withSectionDraft(s, 'NCR-2026-104', 2, r3.draft).reports[0].sections;
     assert.deepEqual(after[2], { content: r3.draft, status: 'Draft' });
     assert.deepEqual(after.slice(0, 2), before.slice(0, 2));
-    assert.equal(eventBadge({ kind: 'AI', actor: 'Quality agent (rule-based D3 draft, no model)' }), 'Agent');
+    assert.equal(eventBadge({ kind: 'AI', actor: 'Quality agent (rule-based D3 draft, no model)' }), 'Rule-based');
 });
 
 test('malformed or uncited section responses are refused', () => {

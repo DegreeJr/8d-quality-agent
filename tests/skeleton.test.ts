@@ -32,7 +32,7 @@ test('accepting or changing the routing is a Human event after the rule-based Sy
     const accepted = acceptRouting(s, ncr.id, p, p.owner, 'Sarah Chen', 'now');
     assert.deepEqual(accepted.audit.slice(0, 2).map(e => [e.kind, e.actor]), [['Human', 'Sarah Chen'], ['System', ROUTING_ACTOR]]);
     assert.equal(accepted.audit[0].action, 'Accepted routing: owner ' + p.owner + '.');
-    assert.equal(eventBadge(accepted.audit[1]), 'System');
+    assert.equal(eventBadge(accepted.audit[1]), 'Rule-based');
     const changed = acceptRouting(s, ncr.id, p, other, 'Sarah Chen', 'now');
     assert.equal(changed.ncrs.find(n => n.id === ncr.id)!.owner, other);
     assert.equal(changed.audit[0].action, 'Changed routing: owner ' + other + ' instead of the proposed ' + p.owner + '.');
